@@ -30,7 +30,8 @@ class LocalAccountHandler(CloudHandler):
     def access_status(self, user):
         return {'can_manage_settings':self.settings_allowed(user),
             'can_trigger_research':user['role'] == 'admin', 'scope':'account_local',
-            'lan_urls':[f'http://{address}:{self.server.server_port}/index.html' for address in lan_addresses()],
+            'lan_urls':[] if getattr(self.server, 'local_only', False) else
+                [f'http://{address}:{self.server.server_port}/index.html' for address in lan_addresses()],
             'site_url':self.request_origin() + '/index.html', 'preview':False}
 
     def do_GET(self):

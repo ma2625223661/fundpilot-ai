@@ -11,6 +11,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from research_data import now_iso
+from research_numbers import finite_number as finite
 
 REFERENCES = {
  'overseas_sp500': {'symbol':'^GSPC','name':'标普500指数','tokens':['S&P','500'],'currency':'USD','zone':'America/New_York','market':'US',
@@ -45,9 +46,6 @@ COMPOSITES = {
  'overseas_em_equity': {'name':'新兴市场·三地市场样本指标','members':['overseas_in_equity','reference_tw_equity','reference_br_equity'],
     'scope':'印度、台湾及巴西三地股票指数的有限新兴市场样本；不是MSCI新兴市场指数，不代表全部新兴国家。各本币价格收益等权，不含汇率、股息、公司财务或未评估事件。'},
 }
-
-def finite(value):
- return isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
 
 def reference_quote_fresh(quote,as_of):
  """Require an evidenced complete local session; never reuse A-share dates."""

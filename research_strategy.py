@@ -10,22 +10,13 @@ import math
 import statistics
 from datetime import date, datetime, timedelta, timezone
 from research_trading_calendar import a_share_quote_fresh
+from research_numbers import parse_number as _number, clamp as _clamp
 
 CHINA = timezone(timedelta(hours=8))
 SCHEMA_VERSION = 1
 MIN_HOLDING_DAYS = 7
 MIN_ROLLING_WINDOWS = 30
 MIN_MARKET_INDICES = 3
-
-
-def _number(value):
-    if isinstance(value, bool):
-        return None
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (ValueError, TypeError):
-        return None
 
 
 def _timestamp(value):
@@ -43,10 +34,6 @@ def _date(value):
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         return None
-
-
-def _clamp(value, low, high):
-    return max(low, min(high, value))
 
 
 def _headline_pressure(news, now):

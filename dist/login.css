@@ -6,4 +6,6 @@ fieldset{border:0;padding:0;margin:0;min-width:0}legend{font-size:12px;color:#9c
 
 .captcha-row{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px;align-items:center}#captchaCode{text-transform:uppercase;letter-spacing:4px;font-weight:650}#captchaCode::placeholder{text-transform:none;letter-spacing:0;font-weight:400}.captcha-image{display:block;width:100%;aspect-ratio:20/7;min-height:0;padding:0;border:1px solid #354259;border-radius:10px;background:#e9edf3;overflow:hidden;cursor:pointer}.captcha-image img{display:block;width:100%;height:100%;object-fit:contain}.captcha-image:disabled{cursor:default}@media(max-width:400px){.captcha-row{grid-template-columns:minmax(0,1fr) 128px;gap:8px}#captchaCode{letter-spacing:2px}}
 
+.lan-notice{border-color:#6b4a2a;background:#2a1d12;color:#ffd2a8}
+
 #phoneFields{margin-top:22px;padding-top:18px;border-top:1px solid #2b3e4d}#phoneFields legend{float:left;width:100%;margin:0 0 4px;padding:0}#phoneFields>label:first-of-type{clear:both}

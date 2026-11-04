@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
+from research_numbers import finite_number as finite
 
 MAX_SAMPLES = 8
 CANDIDATE_LIMIT = 12
@@ -11,10 +12,6 @@ SELECTION_METHOD = ('每方向在已核验归属池内按有效市值或明示�
     '核对披露日财务及近期61个交易日走势后，取至多8家等权研究样本。'
     '通常优先保留4家大市值或固定池代表，微盘方向按小市值选样；其余按已披露盈利、ROE和收入/利润增长条件补充；'
     '缺项不当作0，未通过数据核验的候选单列。不是全市场选股或上涨承诺。')
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def fair_codes(pools):

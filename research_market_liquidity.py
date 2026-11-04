@@ -7,13 +7,10 @@ research scores or infer equity liquidity from price changes.
 from __future__ import annotations
 
 import math
+from research_numbers import finite_number as _finite
 
 
 VERSION = 'market_liquidity_v1'
-
-
-def _finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _score_label(score):

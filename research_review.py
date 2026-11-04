@@ -18,6 +18,7 @@ from research_review_guidance import GUIDANCE_METHOD, review_action, review_guid
 from research_review_evidence import (company_market, closed_day, session_days,
                                      review_input, reference_company)
 from research_trading_calendar import is_trading_day, last_closed_trading_day, next_trading_day
+from research_numbers import strict_finite_number as finite
 
 VERSION = 'five_session_review_v1'
 REFERENCE = 'index_csi300'
@@ -33,10 +34,6 @@ METHOD = ('走势复盘分满分100，四项各25分：五日趋势、相对样�
           '美股公司以标普500价格指数为参照，并按当地交易日计算。'
           '仅有参考指数时另用价格观察模型：趋势40、回撤35、持续性25，不套用公司相对分。'
           '货币市场另用隔夜Shibor流动性模型，以利率和基点表示，不计算投资回报。')
-
-
-def finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def sessions(end, count):

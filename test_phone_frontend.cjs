@@ -41,10 +41,10 @@ test('provider failure never displays success or exposes a usable challenge',asy
   const h=runtime(async()=>{throw new Error('短信未开通');});h.verification.setEnabled(true);h.phone.value='13800138000';await h.send.onclick();
   assert.equal(h.feedback.textContent,'短信未开通');assert.equal(h.send.disabled,true);assert.throws(()=>h.verification.payload(),/先获取/);
 });
-async function loginPage(phoneAuth, {loginFails=false}={}) {
+async function loginPage(phoneAuth, {loginFails=false,host='127.0.0.1'}={}) {
   const elements=new Map();const get=id=>{if(!elements.has(id)){const element=new Element();element.removeAttribute=name=>{delete element[name];};element.focus=()=>{};elements.set(id,element);}return elements.get(id);};
   const calls=[],replaced=[];const h=runtime();let captchas=0;
-  h.context.document={getElementById:get};h.context.AbortSignal=AbortSignal;h.context.location={replace:target=>replaced.push(target)};
+  h.context.document={getElementById:get};h.context.AbortSignal=AbortSignal;h.context.location={protocol:'http:',hostname:host,replace:target=>replaced.push(target)};
   h.context.fetch=async(path,options)=>{calls.push({path,body:options?.body&&JSON.parse(options.body)});
     if(path==='/api/auth/status')return {ok:true,json:async()=>({needs_setup:false,registration_open:true,phone_auth:phoneAuth,captcha_required:true})};
     if(path==='/api/auth/captcha'){captchas++;return {ok:true,json:async()=>({captcha_id:'captcha-'+captchas,image:'data:image/png;base64,AA==',length:6})};}
@@ -101,4 +101,19 @@ test('account binding submits explicit verified phone and current password, then
   assert.equal(calls.at(-1).path,'/api/me/phone/bind');assert.equal(form.hidden,true);
   assert.equal(find('bindPassword').value,'');assert.equal(find('bindCode').value,'');assert.equal(find('bindPhone').value,'');
   assert.ok(nodes.some(item=>item.textContent.includes('138****8000')));
+});
+test('SMS send needs the image challenge first, sends it, and then loads a fresh image',async()=>{
+  const h=await loginPage({available:true,registration_required:false});h.get('smsMethod').onclick();
+  assert.equal(h.get('captchaCode').required,false);
+  h.get('phone').value='13800138000';await h.get('sendCode').onclick();
+  assert.match(h.get('smsStatus').textContent,/6 位图片验证码/);assert.equal(h.calls.some(c=>c.path==='/api/auth/sms/send'),false);
+  h.get('captchaCode').value='AC3K7Z';await h.get('sendCode').onclick();await settle();await settle();
+  const sent=h.calls.find(c=>c.path==='/api/auth/sms/send');
+  assert.deepEqual([sent.body.captcha_id,sent.body.captcha_code,sent.body.purpose],['captcha-1','AC3K7Z','login']);
+  assert.equal(h.calls.at(-1).path,'/api/auth/captcha');
+});
+test('LAN HTTP access shows an unencrypted-connection notice; localhost does not',async()=>{
+  const local=await loginPage({available:false});assert.equal(local.get('lanNotice').textContent,'');
+  const lan=await loginPage({available:false},{host:'192.168.1.23'});
+  assert.equal(lan.get('lanNotice').hidden,false);assert.match(lan.get('lanNotice').textContent,/未加密/);
 });

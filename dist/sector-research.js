@@ -23,7 +23,12 @@
       .filter(e=>{if(!e.id||!e.title||!e.reason||!e.published_at||!Number.isFinite(new Date(e.published_at).getTime())||!finite(e.impact_score)||Math.abs(e.impact_score)<threshold||Math.abs(e.impact_score)>100||!['positive','negative','mixed'].includes(e.direction)||(!e.url&&!e.source_ids.length)||seen.has(e.id))return false;
         if(e.direction==='positive'&&e.impact_score<=0||e.direction==='negative'&&e.impact_score>=0)return false;seen.add(e.id);e.impact_level=Math.abs(e.impact_score)>=70?'high':'medium';return true;})
       .sort((a,b)=>Math.abs(b.impact_score)-Math.abs(a.impact_score)||b.published_at.localeCompare(a.published_at)||a.id.localeCompare(b.id));
-    return {events,threshold,status:txt(input.status,'unavailable'),as_of:txt(input.as_of),hidden_weak_count:finite(input.hidden_weak_count)?Math.max(0,input.hidden_weak_count):0,coverage:input.coverage&&typeof input.coverage==='object'?input.coverage:{},summary:txt(input.summary),method:txt(input.method),error:txt(input.error)};
+    return {events,threshold,status:txt(input.status,'unavailable'),as_of:txt(input.as_of),hidden_weak_count:finite(input.hidden_weak_count)?Math.max(0,input.hidden_weak_count):0,coverage:input.coverage&&typeof input.coverage==='object'?input.coverage:{},summary:txt(input.summary),method:txt(input.method),error:txt(input.error),candidate_count:finite(input.candidate_count)?Math.max(0,Math.trunc(input.candidate_count)):0};
+  }
+  // Events are collected without AI, but only the AI assessment may score them.
+  function eventSetupNotice(analysis) {
+    const found=analysis.candidate_count>0?`已采集 ${analysis.candidate_count} 条公告或政策，`:'';
+    return `事件研究尚未启用：${found}需在设置中开启并验证 AI 后才会评估影响。在此之前，公司研究分不含事件维度，只显示阶段分（满分 70），不进入完整档位。`;
   }
   function eventTone(event) {return event.direction==='positive'?'positive':event.direction==='negative'?'negative':'mixed';}
   function sectorIndicator(value) {if(value?.severity==='critical')return {symbol:'!',className:'risk-critical',label:'特大风险',reason:txt(value.indicator_reason)};if(value?.signal==='trend_excellent')return {symbol:'★',className:'trend-strong',label:'趋势优',reason:txt(value.indicator_reason)};return null;}
@@ -409,7 +414,7 @@
     const search=String(query).trim().toLocaleLowerCase('zh-CN');
     return arr(records).filter(source=>(filter==='all'||sourceRecordState(source)===filter)&&(!search||[source?.name,source?.id,source?.error].filter(Boolean).join(' ').toLocaleLowerCase('zh-CN').includes(search)));
   }
-  const api = {sourceRecordState,sourceOverview,sourceIssueOverview,selectSourceRecords,costPresentation,aiActivityPresentation,aiServicePresentation,researchAdvicePresentation,researchSavedPresentation,researchHistoricalAdvicePresentation,modelLabel, normalizeSector, normalizeReport, normalizeEvents, normalizeCompanyEvidence, normalizeCustomIndex, normalizeMarketSentiment, sentimentPresentation, normalizeMarketLiquidity, liquidityPresentation, researchPanels, eventScheduleText, eventTone, eventScore, eventIndicator, sectorIndicator, sectorDataPresentation, sourceStatusLabel, normalizeDataConfig, dataStatusPresentation, boardScoreGroup, companyScoreView, boardResearchNotice, sortSectors, colorForScore, colorForSector, pct, UNKNOWN};
+  const api = {sourceRecordState,sourceOverview,sourceIssueOverview,selectSourceRecords,costPresentation,aiActivityPresentation,aiServicePresentation,researchAdvicePresentation,researchSavedPresentation,researchHistoricalAdvicePresentation,modelLabel, normalizeSector, normalizeReport, normalizeEvents, eventSetupNotice, normalizeCompanyEvidence, normalizeCustomIndex, normalizeMarketSentiment, sentimentPresentation, normalizeMarketLiquidity, liquidityPresentation, researchPanels, eventScheduleText, eventTone, eventScore, eventIndicator, sectorIndicator, sectorDataPresentation, sourceStatusLabel, normalizeDataConfig, dataStatusPresentation, boardScoreGroup, companyScoreView, boardResearchNotice, sortSectors, colorForScore, colorForSector, pct, UNKNOWN};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SectorResearch = api;
   if (typeof document === 'undefined') return;
@@ -464,7 +469,7 @@
     const analysis=report?.event_analysis||normalizeEvents(null),events=analysis.events;
     setText('eventCount',events.length+' 项中等及以上事件');
     const coverage=$('#eventCoverage');if(coverage){coverage.hidden=!analysis.summary;coverage.textContent=analysis.summary;}
-    setText('eventStatus',report?.report_stale||['stale','expired'].includes(analysis.status)?'正在展示历史事件评估，请按发布时间和报告时间复核。':analysis.status==='not_configured'?'事件研究尚未启用；完成模型和数据配置后按交易日计划运行。':analysis.status==='error'?'本轮事件评估未完成：'+(analysis.error||'等待下一次有效研究。'):analysis.status==='data_unavailable'?'本轮公开公告或官方政策采集未完成，尚不能确认重要事件。':analysis.status==='scheduled'?'事件研究等待下一次交易日时段，当前不补造事件影响分。':analysis.summary||'仅保留影响分绝对值 ≥ '+analysis.threshold+' 的事件；利好绿色正分，利空红色负分，双向影响单独标注。影响分不是涨跌概率。');
+    setText('eventStatus',report?.report_stale||['stale','expired'].includes(analysis.status)?'正在展示历史事件评估，请按发布时间和报告时间复核。':analysis.status==='not_configured'?eventSetupNotice(analysis):analysis.status==='error'?'本轮事件评估未完成：'+(analysis.error||'等待下一次有效研究。'):analysis.status==='data_unavailable'?'本轮公开公告或官方政策采集未完成，尚不能确认重要事件。':analysis.status==='scheduled'?'事件研究等待下一次交易日时段，当前不补造事件影响分。':analysis.summary||'仅保留影响分绝对值 ≥ '+analysis.threshold+' 的事件；利好绿色正分，利空红色负分，双向影响单独标注。影响分不是涨跌概率。');
     eventList($('#eventList'),events,analysis.status==='completed'?'本轮没有达到中等影响标准的事件。':'暂无完成评估的重要事件；待按计划采集可靠公告、政策及公司证据后更新。');
     setText('eventAsOf',(['completed','stale','expired'].includes(analysis.status)?'事件报告时间：':'事件状态更新时间：')+stamp(analysis.as_of||report?.as_of)+' · '+eventScheduleText(config?.schedule||state.ai_schedule));
     setText('eventScheduleLabel',eventScheduleText(config?.schedule||state.ai_schedule)+'；只展示中等及以上影响事件。');

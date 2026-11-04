@@ -11,10 +11,7 @@ from datetime import datetime, timedelta
 
 from research_sample_policy import financial_ready
 from research_trading_calendar import is_trading_day, last_closed_trading_day, a_share_quote_fresh
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+from research_numbers import finite_number as finite
 
 
 def complete_history(rows, as_of, code=''):

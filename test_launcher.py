@@ -324,3 +324,66 @@ class HotReloadTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class OperationsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = __import__('tempfile').TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def test_daily_log_tees_console_output_and_keeps_two_weeks(self):
+        from datetime import datetime, timedelta
+        folder = self.root / 'logs'
+        folder.mkdir()
+        for days in range(20, 0, -1):
+            (folder / f'fundpilot-{(datetime(2026, 11, 4) - timedelta(days=days)):%Y-%m-%d}.log').write_text('old')
+        console = io.StringIO()
+        log = launch.DailyLog(console, folder, clock=lambda: datetime(2026, 11, 4, 15, 30))
+        log.write('FundPilot AI 已启动\n')
+        self.assertEqual(console.getvalue(), 'FundPilot AI 已启动\n')
+        self.assertEqual((folder / 'fundpilot-2026-11-04.log').read_text(encoding='utf-8'), 'FundPilot AI 已启动\n')
+        self.assertEqual(len(list(folder.glob('fundpilot-*.log'))), launch.LOG_KEEP_DAYS)
+
+    def test_account_backup_is_consistent_daily_and_pruned(self):
+        import sqlite3
+        from datetime import datetime
+        from research_local_backup import backup_accounts
+        (self.root / 'data').mkdir()
+        db = sqlite3.connect(self.root / 'data' / 'accounts.sqlite3')
+        db.execute('PRAGMA journal_mode=WAL')  # like the live account store
+        db.execute('CREATE TABLE users(name TEXT)'); db.execute("INSERT INTO users VALUES ('owner')"); db.commit()
+        self.addCleanup(db.close)  # the site keeps its connection open during backups
+        made = backup_accounts(self.root, keep=3, now=datetime(2026, 11, 4))
+        self.assertEqual(made.name, 'accounts-20261104.sqlite3')
+        self.assertEqual(sorted(p.name for p in made.parent.iterdir()), ['accounts-20261104.sqlite3'])  # no -wal/-shm/partial
+        copy = sqlite3.connect(made)
+        self.assertEqual(copy.execute('SELECT name FROM users').fetchall(), [('owner',)])
+        copy.close()
+        self.assertIsNone(backup_accounts(self.root, keep=3, now=datetime(2026, 11, 4)))  # once per day
+        for day in (5, 6, 7):
+            backup_accounts(self.root, keep=3, now=datetime(2026, 11, day))
+        names = sorted(p.name for p in (self.root / 'backups' / 'accounts').glob('*.sqlite3'))
+        self.assertEqual(names, ['accounts-20261105.sqlite3', 'accounts-20261106.sqlite3', 'accounts-20261107.sqlite3'])
+        self.assertIsNone(backup_accounts(self.root / 'missing'))
+
+    def test_local_only_flag_reaches_the_server_and_the_child(self):
+        service = Mock(); service.serve_forever.side_effect = KeyboardInterrupt
+        create = Mock(return_value=service)
+        with patch.dict(sys.modules, {'server': SimpleNamespace(create_server=create)}), \
+                patch.object(launch, 'running_service', return_value=False), patch('sys.stdout', new_callable=io.StringIO) as out:
+            launch.main(['--port', '8765', '--no-browser', '--local-only'])
+        create.assert_called_once_with(8765, local_only=True)
+        self.assertIn('仅本机访问', out.getvalue())
+        with patch.object(launch.subprocess, 'Popen') as popen, patch.object(launch, 'ROOT', self.root):
+            launch.spawn_backend(8765, local_only=True)
+        self.assertIn('--local-only', popen.call_args.args[0])
+
+    def test_local_only_server_refuses_lan_hosts(self):
+        import server
+        handler = SimpleNamespace(headers=SimpleNamespace(get_all=lambda name, default=None: ['192.168.1.9:8765']),
+                                  server=SimpleNamespace(allowed_hosts={'127.0.0.1:8765'}, server_port=8765, local_only=True))
+        with patch.object(server, 'lan_addresses', return_value=['192.168.1.9']):
+            self.assertFalse(server.Handler.valid_host(handler))
+            handler.server.local_only = False
+            self.assertTrue(server.Handler.valid_host(handler))

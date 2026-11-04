@@ -1,3 +1,4 @@
+import unittest.mock
 import copy
 import json
 import unittest
@@ -259,3 +260,31 @@ class SectorResearchTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BroadIndexReferenceTests(unittest.TestCase):
+    def test_broad_indices_use_complete_official_series_and_industries_keep_samples(self):
+        from research_sectors import prefer_company_indicator
+        ready = {'meta': {'ready': True}}
+        with unittest.mock.patch('research_sectors._company_financial_ready', return_value=True):
+            for board_id in ('index_csi300', 'index_csi500', 'index_star', 'index_sse50'):
+                self.assertFalse(prefer_company_indicator({'id': board_id, 'group': 'broad'}, ready, [{}], True, None))
+                # Without a complete official series the sample is still the fallback.
+                self.assertTrue(prefer_company_indicator({'id': board_id, 'group': 'broad'}, ready, [{}], False, None))
+            self.assertTrue(prefer_company_indicator({'id': 'sector_semiconductor', 'group': 'industry'}, ready, [{}], True, None))
+            self.assertFalse(prefer_company_indicator({'id': 'sector_semiconductor', 'group': 'industry'},
+                                                      {'meta': {'ready': False}}, [{}], True, None))
+
+
+class PublisherDailyFreshnessTests(unittest.TestCase):
+    def test_official_end_of_day_series_keep_previous_close_until_evening_publication(self):
+        from research_sectors import _quote_fresh
+        quote = {'code': 'H11001', 'as_of': '2026-11-03', 'as_of_precision': 'date', 'data_frequency': 'daily',
+                 'history_secid': 'official:csindex:H11001', 'change_pct': 0.09}
+        self.assertTrue(_quote_fresh(quote, '2026-11-04T10:00:00+08:00'))
+        self.assertTrue(_quote_fresh(quote, '2026-11-04T15:12:00+08:00'))
+        self.assertFalse(_quote_fresh(quote, '2026-11-04T21:00:00+08:00'))
+        self.assertTrue(_quote_fresh({**quote, 'as_of': '2026-11-04'}, '2026-11-04T21:00:00+08:00'))
+        # Live-sourced daily series still need today's close right after 15:00.
+        tencent = {**quote, 'history_secid': 'tencent:sh000300'}
+        self.assertFalse(_quote_fresh(tencent, '2026-11-04T15:12:00+08:00'))

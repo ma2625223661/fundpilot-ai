@@ -15,6 +15,10 @@ class PhoneHTTPTests(unittest.TestCase):
         self.sent=[]
         self.server.phone_auth=PhoneAuth(self.server.accounts,ENV,sender=lambda *args:self.sent.append(args))
 
+    def test_sms_send_requires_an_image_challenge(self):
+        status,value,_=self.request('/api/auth/sms/send',{'phone':PHONE,'purpose':'login'},solve_captcha=False)
+        self.assertEqual(status,400);self.assertIn('图片验证码',value['error'])
+
     def test_unconfigured_status_and_static_assets_are_public(self):
         self.assertFalse(self.request('/api/auth/status')[1]['phone_auth']['available'])
         self.assertEqual(self.request('/phone-verification.js')[0],200)

@@ -18,7 +18,7 @@ from research_accounts import AccountError, AccountStore, SESSION_SECONDS
 from research_captcha import CaptchaStore
 from research_phone_auth import PhoneAuth
 from research_ai_config import AIConfigStore, _validate_key, _validate_model, validate_schedule, validate_cost_controls, validate_reasoning_effort, DEFAULT_COST_CONTROLS, DEFAULT_REASONING_EFFORT
-from research_auto import AutoResearchEngine
+from research_auto import AutoResearchEngine, client_report_view
 from research_categories import BOARDS
 from research_free_config import FreeDataConfigStore
 from research_public_config import PublicDataConfigStore
@@ -350,7 +350,7 @@ class CloudHandler(Handler):
                     value['ai_config'] = {**value['ai_config'], 'key_hint': ''}
             if isinstance(value.get('report'), dict):
                 value = dict(value)
-                value['report'] = self.member_report(value['report'], user)
+                value['report'] = client_report_view(self.member_report(value['report'], user))
             value = dict(value)
             value['ai_subscription'] = self.server.accounts.subscriptions.summary(user['id'])
             if value.get('report_version'):
@@ -410,6 +410,7 @@ class CloudHandler(Handler):
                             raise AccountError('当前未开放注册，请联系管理员', 403)
                         if self.server.accounts.needs_setup():
                             raise AccountError('请先完成管理员初始化', 409)
+                    self.require_captcha(captcha)
                     return self.reply(200, self.server.phone_auth.send(value['phone'], value['purpose'], ip))
                 if path == '/api/auth/setup':
                     if not self.setup_permitted():

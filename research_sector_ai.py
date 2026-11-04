@@ -14,6 +14,7 @@ from research_responses import build_payload, send_provider, cache_identity, is_
 from research_event_ai import OFFICIAL_EVENT_SOURCES
 from research_ai_evidence import compact_company, compact_index, compact_source, pick
 from research_data import now_iso
+from research_numbers import finite_number as _finite
 
 OFFICIAL_MESSAGE_SOURCES = OFFICIAL_EVENT_SOURCES | {'policy_csrc'}
 
@@ -48,10 +49,6 @@ class _WindowClosedRequest(Exception):
 
 def _texts(value, limit=8):
     return [row.strip()[:2000] for row in value if isinstance(row, str) and row.strip()][:limit] if isinstance(value, list) else []
-
-
-def _finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _source_id(value):

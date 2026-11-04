@@ -14,7 +14,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from research_auto import AutoResearchEngine
+from research_auto import AutoResearchEngine, client_report_view
 from research_ai_config import AIConfigStore
 from research_sectors import run_sector_research
 from research_sector_ai import enrich_sector_report
@@ -217,6 +217,8 @@ class Handler(SimpleHTTPRequestHandler):
             return True
         # Wi-Fi DHCP can change after startup. Only accept an address actually
         # assigned to this machine, never a client-supplied arbitrary hostname.
+        if getattr(self.server, 'local_only', False):
+            return False
         return hosts[0] in {f'{address}:{self.server.server_port}' for address in lan_addresses()}
 
     def local_client(self):
@@ -289,8 +291,8 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == '/api/access':
             return self.reply(200, {
                 'can_manage_settings': self.local_client(),
-                'lan_urls': [f'http://{address}:{self.server.server_port}/index.html'
-                             for address in lan_addresses()],
+                'lan_urls': [] if getattr(self.server, 'local_only', False) else
+                            [f'http://{address}:{self.server.server_port}/index.html' for address in lan_addresses()],
                 'scope': 'same_network',
             })
         if parsed.path == '/api/health':
@@ -313,7 +315,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(503, {'error': '自动扫描服务尚未初始化'})
             engine.start()
             summary = parsed.path == '/api/auto/status' and parse_qs(parsed.query).get('summary') == ['1']
-            return self.reply(200, engine.status(include_report=False) if summary else engine.status())
+            if summary:
+                return self.reply(200, engine.status(include_report=False))
+            value = engine.status()
+            return self.reply(200, {**value, 'report': client_report_view(value.get('report'))})
         if parsed.path == '/api/research':
             return self.reply(410, {'error': '基金研究已移除；当前仅研究板块，请使用 /api/auto/report',
                                     'research_scope': 'sectors'})
@@ -426,10 +431,14 @@ class Handler(SimpleHTTPRequestHandler):
         return self.reply(404, {'error': '接口不存在'})
 
 
-def create_server(port=8765, *, require_login=True):
-    server = BoundedThreadingHTTPServer(('0.0.0.0', port), partial(Handler, directory=str(ROOT / 'dist')))
+def create_server(port=8765, *, require_login=True, local_only=False):
+    # local_only: only this computer can open the site (no phone/LAN access).
+    server = BoundedThreadingHTTPServer(('127.0.0.1' if local_only else '0.0.0.0', port),
+                                        partial(Handler, directory=str(ROOT / 'dist')))
+    server.local_only = local_only
     addresses = {'127.0.0.1', 'localhost'}
-    addresses.update(socket.gethostbyname_ex(socket.gethostname())[2])
+    if not local_only:
+        addresses.update(socket.gethostbyname_ex(socket.gethostname())[2])
     server.allowed_hosts = {f'{address}:{server.server_port}' for address in addresses}
     server.research_scope = 'sectors'
     archive_legacy_fund_state(ROOT)

@@ -8,8 +8,15 @@
     catch {throw new Error('请求未完成，请稍后重试；发送验证码后请先查看短信。');}
     const data=await response.json();if(!response.ok)throw new Error(data.error||'请求失败');return data;
   }
+  // Sending an SMS also spends one image challenge (anti SMS-bombing).
+  function captchaProblem() {
+    if(!captchaId)return '图片验证码尚未加载，请点击图片刷新';
+    return /^[A-Za-z0-9]{6}$/.test($('captchaCode').value.trim())?'':'请先输入上方 6 位图片验证码，再获取短信验证码';
+  }
   const verification=window.FundPilotPhone.create({phone:$('phone'),code:$('smsCode'),send:$('sendCode'),feedback:$('smsStatus'),
-    request:phone=>api('/api/auth/sms/send',{phone,purpose:mode==='register'?'register':'login'})});
+    precheck:captchaProblem,
+    request:phone=>{const body={phone,purpose:mode==='register'?'register':'login',captcha_id:captchaId,captcha_code:$('captchaCode').value.trim()};
+      return api('/api/auth/sms/send',body).finally(()=>loadCaptcha());}});
   function render() {
     if(!status)return;
     const setup=mode==='setup',creating=mode!=='login',smsLogin=mode==='login'&&method==='sms';
@@ -31,7 +38,8 @@
     $('setupField').hidden=!setup||!status.setup_token_required;
     $('setupToken').required=setup&&status.setup_token_required;$('setupToken').disabled=busy;
     $('password').autocomplete=creating?'new-password':'current-password';
-    $('captchaRefresh').disabled=busy;$('captchaCode').disabled=busy;
+    $('captchaRefresh').disabled=busy;$('captchaCode').disabled=busy;$('captchaCode').required=!smsLogin;
+    $('captchaHelp').textContent=smsLogin||usePhone?'不区分大小写；获取短信验证码前需先填写，每张只能用一次（发送后会自动换一张）。':'不区分大小写；看不清可点击图片换一张。每张只能用一次，5 分钟内有效。';
     $('switchMode').hidden=setup||!status.registration_open;$('switchMode').disabled=busy;
     $('switchMode').textContent=creating?'已有账号，返回登录':'还没有账号？注册';
     $('submitAuth').textContent=busy?'正在验证…':setup?'初始化并进入':creating?'注册并进入':smsLogin?'验证并登录':'登录';
@@ -69,6 +77,11 @@
     } catch(error) {$('authStatus').textContent=error.message;if(!smsLogin)loadCaptcha();}
     finally {busy=false;render();}
   };
+  // Plain HTTP to another device's address crosses the local network unencrypted.
+  if(location.protocol==='http:'&&!['127.0.0.1','localhost','[::1]','::1'].includes(location.hostname)){
+    $('lanNotice').textContent='当前通过局域网 HTTP 连接，未加密：密码会以明文经过网络。请只在自己信任的家庭或办公 Wi-Fi 中登录，不要在公共网络使用。';
+    $('lanNotice').hidden=false;
+  }
   fetch('/api/auth/status',{cache:'no-store',signal:AbortSignal.timeout(10000)}).then(async response=>{
     if(!response.ok)throw new Error();status=await response.json();mode=status.needs_setup?'setup':'login';render();loadCaptcha();
   }).catch(()=>{$('formIntro').textContent='账号服务暂时无法连接，请刷新页面重试。';});

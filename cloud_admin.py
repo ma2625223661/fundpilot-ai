@@ -5,10 +5,12 @@ from pathlib import Path
 from research_accounts import AccountStore, AccountError, password_hash
 
 
-def main():
-    folder = os.environ.get('FUNDPILOT_STATE_DIR')
+def main(argv=None):
+    argv = os.sys.argv[1:] if argv is None else argv
+    # --local: the Windows package keeps accounts beside the program in data/.
+    folder = str(Path(__file__).resolve().parent / 'data') if '--local' in argv else os.environ.get('FUNDPILOT_STATE_DIR')
     if not folder or not (Path(folder) / 'accounts.sqlite3').is_file():
-        raise SystemExit('请在已挂载网站持久卷的服务终端中运行。')
+        raise SystemExit('未找到账号数据库：本机请双击“重置密码.cmd”，云端请在已挂载网站持久卷的服务终端中运行。')
     store = AccountStore(Path(folder) / 'accounts.sqlite3')
     username = input('需要重置密码的用户名：').strip()
     new = getpass.getpass('新密码（8～128 个字符）：')

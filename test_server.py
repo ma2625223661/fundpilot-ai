@@ -419,3 +419,19 @@ class ResearchServiceTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ClientReportViewTests(unittest.TestCase):
+    def test_browser_payload_drops_company_histories_without_touching_the_cached_report(self):
+        from research_auto import client_report_view
+        leader = {'ts_code': '600519.SH', 'name': '贵州茅台', 'quote': {'close': 1}, 'history': [{'date': 'd', 'close': 1}]}
+        report = {'as_of': 'x', 'sector_analysis': [{'id': 'sector_liquor', 'leaders': [leader]}, {'id': 'bond'}],
+                  'company_evidence': {'status': 'ok', 'sector_leaders': {'sector_liquor': [leader]}}}
+        view = client_report_view(report)
+        self.assertNotIn('history', view['sector_analysis'][0]['leaders'][0])
+        self.assertNotIn('history', view['company_evidence']['sector_leaders']['sector_liquor'][0])
+        self.assertEqual(view['sector_analysis'][0]['leaders'][0]['quote'], {'close': 1})
+        self.assertEqual(view['sector_analysis'][1], {'id': 'bond'})
+        self.assertIn('history', report['sector_analysis'][0]['leaders'][0])
+        self.assertIn('history', report['company_evidence']['sector_leaders']['sector_liquor'][0])
+        self.assertIsNone(client_report_view(None))

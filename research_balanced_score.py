@@ -11,6 +11,7 @@ from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
 from research_data import CHINA
+from research_numbers import finite_number as finite
 
 VERSION = 'company_research_v2'
 METHOD = ('板块研究模型v2：基本面0–40、走势0–30，只有事件催化双向加减（−30至+30）；'
@@ -38,10 +39,6 @@ def stamp(value):
         return result.replace(tzinfo=CHINA) if result.tzinfo is None else result
     except (ValueError, TypeError):
         return None
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def clip(value, lo=0, hi=100):

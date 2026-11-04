@@ -13,6 +13,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from research_data import CHINA
 from research_trading_calendar import a_share_quote_fresh, is_trading_day, last_closed_trading_day
+from research_numbers import finite_number as _finite
 
 VERSION = 'a_share_sample_sentiment_v1'
 MIN_SAMPLES = 20
@@ -29,10 +30,6 @@ METHOD = ('上涨广度40%＋四大A股指数强弱30%＋20日均线参与度30%
           '缺项不填50分，仅按已具备计算条件的权重归一并标明部分数据。'
           'MA20只使用最近完整交易日及其连续20个交易日的前复权历史，不与盘中现价比较。'
           '低于20低迷、20～<40偏冷、40～<60平稳、60～<80活跃、80及以上过热；固定观察规则，未经收益回测。')
-
-
-def _finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _round(value):

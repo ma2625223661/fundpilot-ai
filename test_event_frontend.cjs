@@ -134,3 +134,11 @@ test('important events show a persistent plain-language score and marker legend'
  const html=fs.readFileSync('./dist/index.html','utf8');
  assert.match(html,/class="event-legend"/);assert.match(html,/利好 \+分（绿）/);assert.match(html,/利空 -分（红）/);assert.match(html,/特大风险（深红）/);assert.match(html,/趋势优（深绿）/);
 });
+
+test('unconfigured event research says how many items await AI and that scores are stage scores',()=>{
+  const analysis=ui.normalizeEvents({status:'not_configured',candidate_count:10,events:[]});
+  assert.equal(analysis.candidate_count,10);
+  const notice=ui.eventSetupNotice(analysis);
+  assert.match(notice,/已采集 10 条公告或政策/);assert.match(notice,/开启并验证 AI/);assert.match(notice,/满分 70/);
+  assert.doesNotMatch(ui.eventSetupNotice(ui.normalizeEvents({status:'not_configured'})),/已采集/);
+});

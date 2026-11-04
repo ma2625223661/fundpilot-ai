@@ -561,6 +561,33 @@ def run_auto_research(progress=None, previous=None, refresh=False):
                           'runs_while_server_online': True, 'trade_execution': False}}
 
 
+def client_report_view(report):
+    """Browser payload: drop per-company daily histories the page never reads.
+
+    Each sample company carries ~120 adjusted closes, stored twice (sector cards
+    and company evidence); together they were about half of the report. The page
+    uses only quotes, financials and memberships, while server-side features such
+    as the five-day review still read the full report. Shallow copies only: the
+    cached report itself is never modified.
+    """
+    if not isinstance(report, dict):
+        return report
+
+    def strip(rows):
+        return [{key: value for key, value in row.items() if key != 'history'} if isinstance(row, dict) else row
+                for row in rows] if isinstance(rows, list) else rows
+    view = dict(report)
+    if isinstance(report.get('sector_analysis'), list):
+        view['sector_analysis'] = [{**sector, 'leaders': strip(sector['leaders'])}
+                                   if isinstance(sector, dict) and 'leaders' in sector else sector
+                                   for sector in report['sector_analysis']]
+    evidence = report.get('company_evidence')
+    if isinstance(evidence, dict) and isinstance(evidence.get('sector_leaders'), dict):
+        view['company_evidence'] = {**evidence, 'sector_leaders': {key: strip(rows)
+                                    for key, rows in evidence['sector_leaders'].items()}}
+    return view
+
+
 class AutoResearchEngine:
     def __init__(self, state_path=None, interval=SCAN_INTERVAL, runner=None,
                  config_provider=None, ai_runner=None, research_scope='funds'):

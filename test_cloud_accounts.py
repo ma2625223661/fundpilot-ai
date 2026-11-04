@@ -16,7 +16,7 @@ from research_captcha import CaptchaStore
 PASSWORD = 'test password for isolated tests'
 # HTTP tests solve the real image challenge with a known answer (see CloudHTTPTests.request).
 TEST_CAPTCHA = 'AC3K7Z'
-CAPTCHA_PATHS = {'/api/auth/login', '/api/auth/register', '/api/auth/setup'}
+CAPTCHA_PATHS = {'/api/auth/login', '/api/auth/register', '/api/auth/setup', '/api/auth/sms/send'}
 
 
 def install_test_captcha(service):
@@ -215,8 +215,8 @@ class CloudHTTPTests(unittest.TestCase):
         self.server.shutdown(); self.server.server_close(); self.thread.join(); self.tmp.cleanup()
 
     def request(self, path, body=None, cookie=None, csrf=None, extra=None, method=None, solve_captcha=True):
-        if (solve_captcha and path in CAPTCHA_PATHS and isinstance(body, dict) and 'username' in body
-                and 'captcha_id' not in body):
+        if (solve_captcha and path in CAPTCHA_PATHS and isinstance(body, dict)
+                and ('username' in body or 'phone' in body) and 'captcha_id' not in body):
             status, challenge, _ = self.request('/api/auth/captcha', extra=extra)
             self.assertEqual(status, 200, challenge)
             body = {**body, 'captcha_id': challenge['captcha_id'], 'captcha_code': TEST_CAPTCHA.lower()}

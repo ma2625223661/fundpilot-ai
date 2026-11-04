@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from research_data import CHINA, fetch_text, now_iso
 from research_trading_calendar import is_trading_day, last_closed_trading_day, a_share_quote_fresh
 from research_sample_policy import MAX_SAMPLES, fair_codes
+from research_numbers import finite_number as finite
 
 VERSION = 'leader_equal_weight_v1'
 MIN_HISTORY = 61
@@ -27,10 +28,6 @@ METHOD = ('自建龙头样本指标 v1：在已核验归属候选池内筛选至
           '综合分还须满足有效数据、明确映射、专用模型三项条件，包括已核验披露日的公司财务证据。'
           '指标编制与研究评分分别版本化；板块研究分采用基本面0–40、走势0–30、事件催化±30。'
           '缺失证据保留待评估状态；大盘风险独立展示。未经收益回测，不是上涨概率。')
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def stamp(value):

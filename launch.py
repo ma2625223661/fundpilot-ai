@@ -13,6 +13,7 @@ import threading
 import time
 import urllib.request
 import webbrowser
+from datetime import datetime
 
 
 ROOT = Path(__file__).resolve().parent
@@ -90,6 +91,66 @@ def self_check():
     return 0
 
 
+LOG_KEEP_DAYS = 14
+
+
+class DailyLog:
+    """Tee console output into data/logs/fundpilot-YYYY-MM-DD.log (kept LOG_KEEP_DAYS).
+
+    The console stays the primary view; the file keeps a record after the window
+    is closed. Both the supervisor and the site process append to the same file."""
+
+    def __init__(self, stream, folder, clock=datetime.now):
+        self.stream, self.folder, self.clock = stream, Path(folder), clock
+        self._day, self._file, self._lock = None, None, threading.Lock()
+
+    def _target(self):
+        day = self.clock().strftime('%Y-%m-%d')
+        if day != self._day:
+            if self._file:
+                self._file.close()
+            self.folder.mkdir(parents=True, exist_ok=True)
+            self._file = open(self.folder / f'fundpilot-{day}.log', 'a', encoding='utf-8')
+            self._day = day
+            for old in sorted(self.folder.glob('fundpilot-*.log'))[:-LOG_KEEP_DAYS]:
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        return self._file
+
+    def write(self, text):
+        written = self.stream.write(text)
+        try:
+            with self._lock:
+                target = self._target()
+                target.write(text)
+                target.flush()
+        except OSError:
+            pass  # a full or locked disk must never stop the website
+        return written
+
+    def flush(self):
+        self.stream.flush()
+
+    def fileno(self):
+        return self.stream.fileno()
+
+    def isatty(self):
+        return self.stream.isatty()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
+def enable_log_file(root=ROOT):
+    folder = Path(root) / 'data' / 'logs'
+    if not isinstance(sys.stdout, DailyLog):
+        sys.stdout = DailyLog(sys.stdout, folder)
+    if not isinstance(sys.stderr, DailyLog):
+        sys.stderr = DailyLog(sys.stderr, folder)
+
+
 def watched_files(root=ROOT):
     """Backend sources by mtime, plus the set of page files.
 
@@ -132,11 +193,11 @@ class Backend:
         return self.process.returncode
 
 
-def spawn_backend(port):
+def spawn_backend(port, local_only=False):
     control = ROOT / 'data' / '.reload' / f'{os.getpid()}-{time.monotonic_ns()}'
     control.mkdir(parents=True, exist_ok=True)
     command = [sys.executable, '-B', str(ROOT / 'launch.py'), '--child', '--no-browser', '--port', str(port),
-               '--control', str(control), '--parent-pid', str(os.getpid())]
+               '--control', str(control), '--parent-pid', str(os.getpid())] + (['--local-only'] if local_only else [])
     # Output shares this window; stdin is detached on purpose (see Backend).
     return Backend(subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL), control)
 
@@ -272,7 +333,8 @@ def install_stall_diagnostics(server, control, *, clock=time.monotonic):
 
     def service_actions():
         try:
-            faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, exit=False)
+            # The real console handle: sys.stderr may be the DailyLog wrapper.
+            faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, exit=False, file=sys.__stderr__)
         except (AttributeError, OSError, RuntimeError, ValueError):
             pass  # stderr without a file descriptor: skip the dump, keep the heartbeat
         now = clock()
@@ -293,6 +355,9 @@ def main(argv=None):
     parser.add_argument('--no-browser', action='store_true', help='不自动打开浏览器')
     parser.add_argument('--port', type=int, default=int(os.environ.get('FUNDPILOT_PORT', '8765')))
     parser.add_argument('--reload', action='store_true', help='热更新：修改 .py 文件后自动重启后台')
+    parser.add_argument('--local-only', action='store_true',
+                        default=os.environ.get('FUNDPILOT_LOCAL_ONLY') == '1',
+                        help='只允许本机访问，手机和局域网其他设备无法打开')
     parser.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--control', help=argparse.SUPPRESS)
     parser.add_argument('--parent-pid', type=int, help=argparse.SUPPRESS)
@@ -302,13 +367,14 @@ def main(argv=None):
     if args.check:
         return self_check()
     if args.reload and not args.child:
-        return supervise(args)
+        return supervise(args, spawn=lambda port: spawn_backend(port, local_only=args.local_only))
     url = f'http://127.0.0.1:{args.port}/index.html'
     if not args.child and reuse_service(args.port, args.no_browser):
         return 0
     from server import create_server
     try:
-        server = create_child_server(create_server, args.port) if args.child else create_server(args.port)
+        make = (lambda port: create_server(port, local_only=True)) if args.local_only else create_server
+        server = create_child_server(make, args.port) if args.child else make(args.port)
     except OSError as error:
         # Two double-clicks may race while the first backend is still starting.
         if getattr(error, 'winerror', None) in (10013, 10048) or error.errno in (13, 48, 98, 10013, 10048):
@@ -333,8 +399,13 @@ def main(argv=None):
         print('请保持本窗口运行，可最小化。关闭窗口或关机会停止网站。', flush=True)
         print('按 Ctrl+C 可停止；下次开机请再次双击 start.cmd。', flush=True)
         print('首次打开请自己创建管理员账号和密码；以后先登录才能使用。', flush=True)
+    if args.local_only:
+        print('已启用仅本机访问：手机和局域网其他设备无法打开本网站。', flush=True)
     try:
         server.auto_engine.start()
+        if not getattr(server, 'skip_account_backup', False):
+            from research_local_backup import start_daily_backup
+            start_daily_backup(ROOT, log=lambda text: print(text, flush=True))
         open_site(url, args.no_browser)
         server.serve_forever()
     except KeyboardInterrupt:
@@ -362,6 +433,8 @@ def create_child_server(create_server, port, *, sleep=time.sleep, clock=time.mon
 
 
 if __name__ == '__main__':
+    if '--check' not in sys.argv:
+        enable_log_file()
     try:
         raise SystemExit(main())
     except Exception as error:

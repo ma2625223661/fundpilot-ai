@@ -1,5 +1,6 @@
 """Convertible-bond index trend heuristic; no issuer/valuation data invented."""
 import math
+from research_numbers import finite_number as _finite
 
 VERSION = 'convertible_trend_v1'
 METHOD = ('可转债趋势模型 v1：以中证可转换债券指数的公开历史日线为依据，'
@@ -10,10 +11,6 @@ METHOD = ('可转债趋势模型 v1：以中证可转换债券指数的公开历
           '可转债含股性与信用风险，A股压力防御/谨慎/资料不足时上限分别49/64/49。'
           '未取得转股溢价、到期收益率、发行人评级、强赎及回售条款，不计入模型；'
           '该分数仅反映指数走势，不能判断转债便宜、信用安全或可买入。')
-
-
-def _finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def score_convertible(metrics, daily_change, regime=None):

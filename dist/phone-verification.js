@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   // Shared by registration, SMS login and account binding. Never stores codes.
-  function create({phone, code, send, feedback, request}) {
+  function create({phone, code, send, feedback, request, precheck}) {
     let enabled=false, blocked=false, sending=false, challenge='', expires=0, nextSend=0, revision=0, timer;
     const normalized=()=>phone.value.trim().replace(/^\+86/, '');
     function render() {
@@ -22,6 +22,8 @@
     send.onclick=async()=>{
       if(send.disabled)return;
       if(!/^1[3-9][0-9]{9}$/.test(normalized())){feedback.textContent='请输入中国大陆 11 位手机号';phone.focus();return;}
+      // Optional local check (e.g. the image CAPTCHA) that must not start the resend cooldown.
+      const problem=precheck?precheck():'';if(problem){feedback.textContent=problem;return;}
       reset();const ticket=revision, number=normalized();nextSend=Date.now()+60000;sending=true;render();feedback.textContent='正在请求验证码…';
       try {
         const data=await request(number);

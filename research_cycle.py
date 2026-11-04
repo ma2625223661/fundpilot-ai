@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from research_data import CHINA
 from research_trading_calendar import last_closed_trading_day
 from research_scarcity import profile_for, profiles_for, attention_for, summary_for, NOTE as SCARCITY_NOTE
+from research_numbers import strict_finite_number as finite
 
 VERSION = 'long_wave_workspace_v1'
 ELIGIBLE = ('admin', 'active', 'exhausted')
@@ -56,10 +57,6 @@ SCENARIOS = (
     ('pressure', '需求偏弱 · 资金趋紧', '新订单 PMI <50，20日隔夜 Shibor 上升至少5基点',
      '降低研究优先级中的叙事权重，先检查现金流、杠杆与回撤风险。'),
 )
-
-
-def finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def timestamp(value):

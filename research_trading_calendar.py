@@ -96,7 +96,7 @@ def last_closed_trading_day(value):
     return None
 
 
-def a_share_quote_fresh(value, as_of, daily=False):
+def a_share_quote_fresh(value, as_of, daily=False, published_hour=None):
     """Check a dated close or live quote against verified exchange sessions.
 
     A long known closure does not expire the latest close. During an open
@@ -121,6 +121,10 @@ def a_share_quote_fresh(value, as_of, daily=False):
         reference = now.replace(hour=11, minute=30, second=0, microsecond=0) if (11, 30, 0) <= current < (13, 0, 0) else now
         return (reference - quote).total_seconds() <= 1200
     expected = last_closed_trading_day(now.isoformat())
+    if daily and published_hour is not None and expected == now.date().isoformat() and now.hour < published_hour:
+        # Publisher end-of-day files (e.g. CSI bond indices) appear hours after
+        # the close; until then the previous completed session is the latest.
+        expected = last_closed_trading_day(now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat())
     return bool(expected and quote.date().isoformat() == expected
                 and (len(str(value)) == 10 or quote.hour >= 15))
 

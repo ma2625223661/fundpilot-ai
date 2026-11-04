@@ -26,6 +26,7 @@ from research_bond_model import score_bond, METHOD as BOND_SCORE_METHOD
 from research_convertible_model import score_convertible, METHOD as CONVERTIBLE_SCORE_METHOD
 from research_macro_risk import collect_cached_macro_risk as collect_macro_risk
 from research_strategy import _pressure, _regime
+from research_numbers import parse_number as _number, clamp as _clamp
 
 SECTOR_SCHEMA_VERSION = 1
 CATALOG_URL = 'https://push2.eastmoney.com/api/qt/clist/get'
@@ -150,16 +151,6 @@ SCORE_METHOD = ('0–100 分板块研究指数为固定启发式规则，非收�
                 '此分仅用于参考走势；大盘风险独立展示，不截断走势分；不套用公司综合研究档位。')
 
 
-def _number(value):
-    if isinstance(value, bool):
-        return None
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (ValueError, TypeError):
-        return None
-
-
 def _timestamp(value):
     try:
         stamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
@@ -174,6 +165,26 @@ def _fresh(value, reference):
         return False
     hours = 90 if now.weekday() == 0 and now.hour < 10 else (72 if now.weekday() > 4 else 36)
     return 0 <= (now - stamp).total_seconds() <= hours * 3600
+
+
+# Official index publishers post the day's close in the evening.
+PUBLISHER_DAILY_HOUR = 20
+
+
+def prefer_company_indicator(board, bundle, leaders, reference_complete, as_of):
+    """Choose the self-built company sample over the official reference series.
+
+    A broad market index (沪深300, 中证500, 科创50 ...) is represented by its own
+    official quotes and history whenever they are complete: an equal-weight basket
+    of at most eight constituents cannot stand in for hundreds of index members and
+    can even move the other way on the day. Industry and theme directions keep the
+    sample, which carries the company fundamentals. Without a complete official
+    series the sample remains the fallback for every group."""
+    if not reference_complete:
+        return True
+    if board.get('group') == 'broad':
+        return False
+    return bool(bundle['meta']['ready'] and all(_company_financial_ready(r, as_of) for r in leaders))
 
 
 def _quote_fresh(quote, as_of):
@@ -191,7 +202,10 @@ def _quote_fresh(quote, as_of):
     if str(quote.get('code', '')).startswith(('hk', 'us.')):
         return _fresh(quote.get('as_of'), as_of)
     from research_trading_calendar import a_share_quote_fresh
-    return a_share_quote_fresh(quote.get('as_of'), as_of, daily=quote.get('data_frequency') == 'daily')
+    daily = quote.get('data_frequency') == 'daily'
+    publisher = daily and str(quote.get('history_secid', '')).startswith('official:')
+    return a_share_quote_fresh(quote.get('as_of'), as_of, daily=daily,
+                               published_hour=PUBLISHER_DAILY_HOUR if publisher else None)
 
 
 def _history_fresh(history, quote, as_of):
@@ -211,10 +225,6 @@ def _history_fresh(history, quote, as_of):
         return bool(day and history[-1]['date'] == quote.get('as_of') and _quote_fresh(quote, as_of))
     from research_trading_calendar import last_closed_trading_day
     return bool(day and now and history[-1]['date'] == last_closed_trading_day(as_of))
-
-
-def _clamp(value, low, high):
-    return max(low, min(high, value))
 
 
 def _company_financial_ready(row, as_of):
@@ -1038,7 +1048,7 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
             reference_history = histories.get((reference or {}).get('history_secid'), [])
             reference_complete = bool(reference and _quote_fresh(reference, as_of)
                 and len(reference_history) >= MIN_HISTORY and _history_fresh(reference_history, reference, as_of))
-            if (bundle['meta']['ready'] and all(_company_financial_ready(r, as_of) for r in leaders)) or not reference_complete:
+            if prefer_company_indicator(board, bundle, leaders, reference_complete, as_of):
                 custom[board['id']] = bundle
     official = {'events': [], 'sources': [], 'warnings': []}
     if include_events and quote_only:

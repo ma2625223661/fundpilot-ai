@@ -6,6 +6,7 @@ It leaves the existing research and historical review scores untouched.
 import math
 
 from research_sector_ai import _research_action
+from research_numbers import strict_finite_number as finite
 
 
 GUIDANCE_VERSION = 'review_attention_v1'
@@ -18,10 +19,6 @@ GUIDANCE_METHOD = (
     '上限取最严格的一项，不重复相减。缺少完整五日评分或报告过期时不出指数。'
     '档位：≥65乐观看待、50至不足65中性、30至不足50谨慎、低于30规避。'
     '这些是公开的研究筛选规则，未经收益策略回测，不表示上涨概率或买卖价格。')
-
-
-def finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def review_action(score):

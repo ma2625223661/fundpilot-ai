@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 import statistics
 from datetime import date, datetime, timedelta, timezone
+from research_numbers import parse_number as _number, clamp as _clamp
 
 CHINA = timezone(timedelta(hours=8))
 RISK_LIMITS = {
@@ -26,16 +27,6 @@ METRIC_KEYS = ('return_20d', 'return_60d', 'volatility_annual', 'max_drawdown',
                'rsi14', 'ma20_gap', 'ma60_gap')
 
 
-def _number(value):
-    if isinstance(value, bool):
-        return None
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (ValueError, TypeError):
-        return None
-
-
 def _date(value):
     if isinstance(value, date):
         return value.date() if isinstance(value, datetime) else value
@@ -49,10 +40,6 @@ def _date(value):
 
 def _today(snapshot):
     return _date(snapshot.get('as_of')) or datetime.now(CHINA).date()
-
-
-def _clamp(value, low, high):
-    return max(low, min(high, value))
 
 
 def _category(fund, risk):
