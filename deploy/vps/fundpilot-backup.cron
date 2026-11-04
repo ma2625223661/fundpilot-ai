@@ -1,0 +1,4 @@
+# Daily at 03:15 in the VPS host's timezone, not the container's timezone.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 3 * * * root /usr/bin/flock -n /run/lock/fundpilot-backup.lock /usr/bin/python3 /usr/local/sbin/fundpilot-backup.py --database /var/lib/fundpilot/data/cloud/accounts.sqlite3 --destination /var/backups/fundpilot --keep-days 14 > /var/log/fundpilot-backup.log 2>&1

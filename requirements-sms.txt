@@ -1,0 +1,2 @@
+# Optional on local installations; included in the cloud image.
+alibabacloud-dysmsapi20170525==4.6.0

@@ -1,0 +1,9 @@
+# prepare_env.py substitutes only a validated domain; secrets stay in .env.
+{$FUNDPILOT_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8080 {
+        # Send Caddy's parsed client IP, overwriting any client-supplied XFF.
+        # With a future CDN, also configure Caddy's trusted_proxies explicitly.
+        header_up X-Forwarded-For {client_ip}
+    }
+}

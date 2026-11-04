@@ -1,0 +1,12 @@
+.public-live-strip{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:0;margin:14px 0 22px;border:1px solid #293b4b;border-radius:16px;background:linear-gradient(110deg,#172b31,#18232f 65%);overflow:hidden;color:#dbe5ed}
+.public-live-strip>div{padding:16px 20px;min-width:0;display:flex;flex-direction:column;gap:5px}
+.public-live-strip>div+div{border-left:1px solid #2b3c49}
+.public-live-strip span,.public-live-strip small{color:#a5b6c5;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.public-live-strip strong{font-size:15px;line-height:1.5;font-weight:650}
+.public-live-strip .public-live-primary{display:flex;flex-direction:row;align-items:center;gap:12px}
+.public-live-primary>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.public-live-strip .public-live-dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#7e9baf}
+.public-live-strip[data-market=trading] .public-live-dot{background:#63d7ae;box-shadow:0 0 0 5px #63d7ae15}
+.public-live-strip .public-live-badge{font-size:11px;white-space:nowrap;color:#a0e5cd;border:1px solid #315d55;border-radius:7px;padding:3px 7px;margin-left:auto}
+@media(max-width:1050px){.public-live-strip{grid-template-columns:1fr 1fr}.public-live-strip .public-live-primary{grid-column:1/-1;border-bottom:1px solid #2b3c49}.public-live-strip>div:nth-child(2){border-left:0}}
+@media(max-width:540px){.public-live-strip>div{padding:13px 14px}.public-live-strip strong{font-size:14px}.public-live-strip span,.public-live-strip small{font-size:11px}.public-live-strip{margin:12px 0 18px;border-radius:13px}}

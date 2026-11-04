@@ -1,0 +1,11 @@
+**
+!Dockerfile
+!requirements.txt
+!requirements-cloud.txt
+!requirements-sms.txt
+!server.py
+!cloud_server.py
+!cloud_admin.py
+!research_*.py
+!dist/
+!dist/**

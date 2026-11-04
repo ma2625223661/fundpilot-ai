@@ -1,0 +1,61 @@
+'use strict';
+(() => {
+  const $=id=>document.getElementById(id);
+  let status=null, mode='login', method='password', busy=false;
+  async function api(path,body) {
+    let response;
+    try {response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});}
+    catch {throw new Error('请求未完成，请稍后重试；发送验证码后请先查看短信。');}
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'请求失败');return data;
+  }
+  const verification=window.FundPilotPhone.create({phone:$('phone'),code:$('smsCode'),send:$('sendCode'),feedback:$('smsStatus'),
+    request:phone=>api('/api/auth/sms/send',{phone,purpose:mode==='register'?'register':'login'})});
+  function render() {
+    if(!status)return;
+    const setup=mode==='setup',creating=mode!=='login',smsLogin=mode==='login'&&method==='sms';
+    const phone=status.phone_auth||{},usePhone=smsLogin||mode==='register'&&(phone.available||phone.registration_required);
+    const unavailable=usePhone&&!phone.available;
+    $('formTitle').textContent=setup?'创建管理员账号':creating?'创建个人研究账号':'登录研究工作台';
+    $('formIntro').textContent=setup?(status.setup_available===false?'请先在运行后台的电脑上完成初始化，再回到此处登录。':'首次使用，请设置管理员账号和密码。'):creating?'个人关注与研究记录单独保存。':'欢迎回来，继续您的板块研究。';
+    $('loginMethods').hidden=mode!=='login';
+    $('passwordMethod').disabled=busy;$('smsMethod').disabled=busy||!phone.available;
+    $('passwordMethod').setAttribute('aria-pressed',String(!smsLogin));$('smsMethod').setAttribute('aria-pressed',String(smsLogin));
+    $('phoneNotice').hidden=setup||Boolean(phone.available);
+    $('phoneNotice').textContent=phone.message||'短信验证暂未开通，当前可使用用户名和密码注册、登录。';
+    $('credentials').hidden=smsLogin;$('credentials').disabled=smsLogin||busy;
+    $('confirmField').hidden=!creating;$('confirm').required=creating;
+    $('phoneFields').hidden=!usePhone;
+    $('phoneLegend').textContent=smsLogin?'使用已绑定的手机号登录':'验证手机号 · 保护您的账号';
+    $('phone').required=usePhone;$('smsCode').required=usePhone;
+    verification.setEnabled(usePhone&&phone.available);verification.setBusy(busy);
+    $('setupField').hidden=!setup||!status.setup_token_required;
+    $('setupToken').required=setup&&status.setup_token_required;$('setupToken').disabled=busy;
+    $('password').autocomplete=creating?'new-password':'current-password';
+    $('switchMode').hidden=setup||!status.registration_open;$('switchMode').disabled=busy;
+    $('switchMode').textContent=creating?'已有账号，返回登录':'还没有账号？注册';
+    $('submitAuth').textContent=busy?'正在验证…':setup?'初始化并进入':creating?'注册并进入':smsLogin?'验证并登录':'登录';
+    $('submitAuth').disabled=busy||unavailable||setup&&status.setup_available===false;
+  }
+  function reset() {verification.reset(true);$('authStatus').textContent='';$('password').value='';$('confirm').value='';render();}
+  $('switchMode').onclick=()=>{if(busy)return;mode=mode==='login'?'register':'login';method='password';reset();};
+  $('passwordMethod').onclick=()=>{if(busy)return;method='password';reset();};
+  $('smsMethod').onclick=()=>{if(busy||!status?.phone_auth?.available)return;method='sms';reset();};
+  $('authForm').onsubmit=async event=>{
+    event.preventDefault();if(busy||!status||$('submitAuth').disabled)return;
+    const smsLogin=mode==='login'&&method==='sms';
+    if(mode!=='login'&&$('password').value!==$('confirm').value){$('authStatus').textContent='两次密码不一致';return;}
+    let body=smsLogin?{}:{username:$('username').value,password:$('password').value};
+    try {if(smsLogin||mode==='register'&&(status.phone_auth?.available||status.phone_auth?.registration_required))body={...body,...verification.payload()};}
+    catch(error){$('authStatus').textContent=error.message;return;}
+    if(mode==='setup')body.setup_token=$('setupToken').value;
+    busy=true;render();$('authStatus').textContent='正在验证…';
+    try {
+      await api('/api/auth/'+(smsLogin?'sms/login':mode),body);
+      verification.reset(true);$('password').value='';$('confirm').value='';$('setupToken').value='';location.replace('/index.html');
+    } catch(error) {$('authStatus').textContent=error.message;}
+    finally {busy=false;render();}
+  };
+  fetch('/api/auth/status',{cache:'no-store',signal:AbortSignal.timeout(10000)}).then(async response=>{
+    if(!response.ok)throw new Error();status=await response.json();mode=status.needs_setup?'setup':'login';render();
+  }).catch(()=>{$('formIntro').textContent='账号服务暂时无法连接，请刷新页面重试。';});
+})();

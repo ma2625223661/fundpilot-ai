@@ -1,0 +1,7 @@
+{
+  "url": "https://www.cnindex.com.cn/sample-detail/download?indexcode=980138&dateStr=2026-10",
+  "publisher": "深圳证券信息有限公司 · 国证指数",
+  "snapshot_date": "2026-10-30",
+  "retrieved_date": "2026-11-01",
+  "purpose": "offline regression fixture for official BIFF XLS format; not application seed data"
+}

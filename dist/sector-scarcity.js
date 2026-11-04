@@ -1,0 +1,55 @@
+(function(root){
+  'use strict';
+  const VERSION='scarcity_news_20261101_v2',text=v=>typeof v==='string'?v:'',list=v=>Array.isArray(v)?v.filter(s=>typeof s==='string'):[];
+  const verdicts={cross_checked:'本批交叉印证',single_source:'单一来源陈述',disputed:'证据存在冲突',insufficient:'真实性待核验'};
+  const safe=v=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}};
+  function verification(value){
+    const v=value||{},status=Object.hasOwn(verdicts,v.status)?v.status:'insufficient';
+    return {status,label:verdicts[status],claim_type:text(v.claim_type),claim_excerpt:text(v.claim_excerpt),reason:text(v.reason),inference:text(v.inference),uncertainties:list(v.uncertainties),note:text(v.note),
+      links:(Array.isArray(v.links)?v.links:[]).filter(Boolean).map(l=>({relation:text(l.relation),title:text(l.title),url:safe(l.url),published_at:text(l.published_at),fact_excerpt:text(l.fact_excerpt),reason:text(l.reason),independent:l.independent===true})).filter(l=>l.url&&['supports','contradicts'].includes(l.relation))};
+  }
+  function normalize(value){
+    if(!value||value.version!==VERSION||!['resource','technology','capacity'].includes(value.category)||!['reviewed','needs_review','easing'].includes(value.status))return null;
+    const sources=(Array.isArray(value.sources)?value.sources:[]).filter(Boolean).map(s=>({title:text(s.title),url:safe(s.url),published_at:text(s.published_at),kind:text(s.kind),fact_excerpt:text(s.fact_excerpt)}));
+    if(!sources.length||sources.some(s=>!s.url||!s.title)||!text(value.scope)||!text(value.basis))return null;
+    const number=v=>typeof v==='number'&&Number.isFinite(v),bounded=v=>number(v)&&v>=0&&v<=100?v:null,st=value.strength||{},attention=value.attention||{};
+    const dimensions=(Array.isArray(st.dimensions)?st.dimensions:[]).filter(Boolean).slice(0,4).map(d=>({title:text(d.title),points:number(d.points)&&d.points>=0&&d.points<=25?d.points:null,reason:text(d.reason),fact_excerpt:text(d.fact_excerpt),source_indices:Array.isArray(d.source_indices)?d.source_indices.filter(n=>Number.isInteger(n)&&n>=0&&n<sources.length):[]}));
+    return {version:VERSION,category:value.category,status:value.status,sector_id:text(value.sector_id),title:text(value.title),label:text(value.label),scope:text(value.scope),scope_level:text(value.scope_level),basis:text(value.basis),boundary:text(value.boundary),checks:list(value.checks),invalidation:list(value.invalidation),sources,reviewed_at:text(value.reviewed_at),review_due_at:text(value.review_due_at),method:text(value.method),note:text(value.note),direction:text(value.direction),direction_label:text(value.direction_label),verification:verification(value.verification),
+      strength:{score:bounded(st.score),confirmed_score:bounded(st.confirmed_score),possible_range:Array.isArray(st.possible_range)?st.possible_range.filter(number).slice(0,2):[],coverage:dimensions.filter(d=>d.points!==null).length,status:text(st.status),method:text(st.method),dimensions},
+      attention:{score:bounded(attention.score),known_score:bounded(attention.known_score),known_maximum:attention.known_maximum===100?100:70,label:text(attention.label)||'待完成评估',note:text(attention.note)}};
+  }
+  const isMarked=s=>s?.scarcity?.status==='reviewed'&&['single_source','cross_checked'].includes(s.scarcity.verification?.status)&&s.scarcity.verification?.claim_type==='fact';
+  const el=(tag,copy,cls)=>{const n=document.createElement(tag);if(copy!==undefined&&copy!==null)n.textContent=copy;if(cls)n.className=cls;return n;};
+  const link=(copy,url)=>{const a=el('a',copy);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;};
+  function metrics(raw){
+    const p=normalize(raw);if(!p)return null;
+    const box=el('div',null,'scarcity-metrics'),st=p.strength,a=p.attention,strength=el('div'),attention=el('div');
+    strength.append(el('span','稀缺强度 · 公告证据'),el('b',st.score!==null?st.score+' / 100':st.confirmed_score!==null?'已支持 '+st.confirmed_score+' 分':'待核验'),el('small',st.score!==null?'4/4项有原文依据 · '+p.verification.label:st.confirmed_score!==null?st.coverage+'/4项有依据 · 缺项不补分':'预测、争议及缺证据不定分'));
+    attention.append(el('span','推荐关注值 · 研究分'),el('b',a.score!==null?a.score.toFixed(2)+' / 100':'待完成评估'),el('small',a.score!==null?a.label:a.known_score!==null?'基础/阶段 '+a.known_score.toFixed(2)+' / '+a.known_maximum:'基本面、走势与事件证据待齐'));
+    box.append(strength,attention);return box;
+  }
+  function badge(raw){
+    const p=normalize(raw);if(!p)return null;
+    const n=el('span',p.status==='easing'?'◇ 稀缺约束缓解':isMarked({scarcity:p})?'◇ 稀缺线索 · '+p.label:'◇ 稀缺性待核验','scarcity-badge');n.dataset.kind=p.status==='reviewed'?p.category:'pending';n.title=p.scope+'；'+p.verification.label+'。'+p.boundary;return n;
+  }
+  function verificationDetail(raw){
+    const v=verification(raw),box=el('section',null,'scarcity-verification');box.dataset.status=v.status;
+    box.append(el('b','证据研判 · '+v.label),el('p',v.reason));
+    if(v.claim_excerpt)box.append(el('small','发布方原文 · '+({fact:'事实陈述',forecast:'预测',opinion:'观点'}[v.claim_type]||'待辨')),el('blockquote',v.claim_excerpt));
+    if(v.inference)box.append(el('small','AI推断'),el('p',v.inference));
+    if(v.uncertainties.length){box.append(el('small','疑点与局限'));const ul=el('ul');v.uncertainties.forEach(s=>ul.append(el('li',s)));box.append(ul);}
+    for(const l of v.links){const item=el('div',null,'scarcity-cross-source');item.append(link((l.relation==='contradicts'?'相反证据':'支持证据')+' · '+l.title+' ↗',l.url),el('small',(l.independent?'不同发布主体':'同一发布主体')+' · '+l.published_at),el('blockquote',l.fact_excerpt),el('p',l.reason));box.append(item);}
+    if(v.note)box.append(el('p',v.note,'scarcity-rating-method'));return box;
+  }
+  function detail(raw,compact=false,showMetrics=true){
+    const p=normalize(raw);if(!p)return null;
+    const box=el('details',null,'scarcity-detail'+(compact?' is-compact':'')),summary=el('summary');summary.append(badge(p),el('span','查看原文、推理与疑点','scarcity-detail-prompt'));box.append(summary);
+    const body=el('div',null,'scarcity-detail-body');if(showMetrics)body.append(metrics(p));body.append(el('p',p.scope,'scarcity-scope'),el('small',(p.scope_level==='company'?'公司及具体环节陈述':'具体产业环节')+' · '+p.direction_label,'scarcity-review'),el('p',p.basis),verificationDetail(p.verification));
+    if(p.strength.dimensions.length){const rating=el('div',null,'scarcity-dimensions');for(const d of p.strength.dimensions){const row=el('div'),top=el('div');top.append(el('span',d.title),el('b',d.points===null?'待核验':d.points+' / 25'));row.append(top,el('small',d.reason));if(d.fact_excerpt){const quote=el('details');quote.append(el('summary','查看对应原文 [1]'),el('blockquote',d.fact_excerpt));row.append(quote);}rating.append(row);}body.append(rating,el('p',p.strength.method,'scarcity-rating-method'));}
+    if(p.attention.note)body.append(el('p',p.attention.note+' ≥65且原附加条件满足为乐观看待；50～<65中性；30～<50谨慎；<30规避。','scarcity-rating-method'));
+    body.append(el('p',p.boundary,'scarcity-boundary'));
+    const columns=el('div',null,'scarcity-checks');for(const [label,items] of [['继续核验',p.checks],['判断失效条件',p.invalidation]]){const group=el('div'),ul=el('ul');group.append(el('b',label));items.forEach(s=>ul.append(el('li',s)));group.append(ul);columns.append(group);}body.append(columns);
+    const sources=el('div',null,'scarcity-sources');for(const [i,s] of p.sources.entries())sources.append(link('['+(i+1)+'] '+s.title+' ↗',s.url),el('small',s.kind+' · '+s.published_at));body.append(sources,el('small','AI分析 '+(p.reviewed_at||'时间待核验')+' · 原文有效期至 '+p.review_due_at,'scarcity-review'),el('small','订阅附带 · 稀缺标签不加分；查看不调用AI、不另扣点。','scarcity-review'));box.append(body);return box;
+  }
+  const api={normalize,isMarked,badge,detail,metrics,verification,verificationDetail};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.FundPilotScarcity=api;
+})(typeof window!=='undefined'?window:globalThis);

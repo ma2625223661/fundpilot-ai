@@ -1,0 +1,93 @@
+# 用户截图板块映射
+
+分类版本：6。截图中的83项按原顺序逐一对应独立板块；系统另保留其他既有分类，共119项。
+
+名称和来源类型只用于初筛，未构成持仓、指数成份、风格、债券久期或交易资格的证明。新行业细分要求有报告期的披露持仓与精确板块标签，其他新增风格、指数、区域、久期与固收方向仍需各自的专门证据；缺失时保持待核验。
+
+红利与红利低波、标普与纳指、亚太与新兴市场分别研究；普通债券不会自动归为中长债。养老目标与养老FOF产品不因名称带养老而归为养老产业股票主题。
+
+| 序号 | 截图名称 | 稳定ID | 检索别名 | 展示需匹配核验 |
+| --- | --- | --- | --- | --- |
+| 1 | 白酒 | `sector_liquor` | 白酒行业 | 是 |
+| 2 | 食品饮料 | `sector_food_beverage` | 食品、饮料、食饮 | 是 |
+| 3 | 港股互联 | `overseas_hk_internet` | 港股互联网、中概互联网、中国互联网 | 是 |
+| 4 | 港股红利 | `overseas_hk_dividend` | 香港红利、恒生红利、港股高股息 | 是 |
+| 5 | CXO | `sector_cxo` | 医药研发外包、医药外包 | 是 |
+| 6 | 油气资源 | `sector_oil_gas` | 石油、天然气 | 是 |
+| 7 | 沪港深消费 | `overseas_hugangshen_consumer` | 沪深港消费、跨市场消费 | 是 |
+| 8 | 脑机接口 | `sector_brain_computer` | 脑机交互 | 是 |
+| 9 | 消费 | `sector_consumer` | — | 是 |
+| 10 | 交通运输 | `sector_transport` | 物流、航运、航空、快递、港口 | 是 |
+| 11 | 恒生 | `overseas_hang_seng` | 恒生指数、香港宽基 | 是 |
+| 12 | 恒生科技 | `overseas_hang_seng_technology` | 恒生科技指数、香港科技 | 是 |
+| 13 | 房地产 | `sector_real_estate` | — | 是 |
+| 14 | 海外医药 | `overseas_healthcare` | 全球医药、海外医疗、港股医药 | 是 |
+| 15 | 红利低波 | `style_dividend_low_volatility` | 红利低波动、低波红利 | 是 |
+| 16 | 医疗 | `sector_medical` | 医疗器械、医疗服务 | 是 |
+| 17 | 家用电器 | `sector_home_appliances` | 家电 | 是 |
+| 18 | 红利 | `dividend` | 高股息、红利策略 | 是 |
+| 19 | 煤炭 | `sector_coal` | 煤业 | 是 |
+| 20 | 养老产业 | `sector_eldercare` | 养老服务、银发经济 | 是 |
+| 21 | 现金流 | `style_cashflow` | 自由现金流、现金流策略 | 是 |
+| 22 | 锂矿 | `sector_lithium_mining` | 锂资源 | 是 |
+| 23 | 医药 | `sector_healthcare` | 生物医药、制药 | 是 |
+| 24 | 银行 | `sector_banking` | — | 是 |
+| 25 | 固态电池 | `sector_solid_state_battery` | 全固态电池、半固态电池 | 是 |
+| 26 | 创新药 | `sector_innovative_drug` | 创新医药 | 是 |
+| 27 | 化工 | `sector_chemicals` | — | 是 |
+| 28 | 货币基金 | `money` | — | 沿用既有资产规则 |
+| 29 | 基建 | `sector_infrastructure` | 基建与建材、基础设施、建筑建材 | 是 |
+| 30 | 短债 | `short_bond` | — | 沿用既有资产规则 |
+| 31 | 北证 | `index_beijing` | 北证50、北京证券交易所50 | 是 |
+| 32 | 中长债 | `long_bond` | 中长期纯债、中长期债券、长债 | 是 |
+| 33 | 可转债 | `convertible_bond` | — | 沿用既有资产规则 |
+| 34 | 固收+ | `fixed_income_plus` | 固收加、固收增强、固定收益加 | 是 |
+| 35 | 上证50 | `index_sse50` | 上证50指数、SSE50 | 是 |
+| 36 | 钢铁 | `sector_steel` | 钢材 | 是 |
+| 37 | 标普 | `overseas_sp500` | 标普500、S&P500 | 是 |
+| 38 | 稀土永磁 | `sector_rare_earth_magnet` | 稀土、永磁 | 是 |
+| 39 | 农林牧渔 | `sector_agriculture` | 农业与养殖、农业、养殖 | 是 |
+| 40 | 蓝筹 | `style_bluechip` | 蓝筹精选、蓝筹策略 | 是 |
+| 41 | 新能源 | `sector_renewable` | — | 是 |
+| 42 | 汽车整车 | `sector_auto_vehicle` | 整车、汽车制造 | 是 |
+| 43 | 港创新药 | `overseas_hk_innovative_drug` | 港股创新药、香港创新药、恒生创新药 | 是 |
+| 44 | 有色金属 | `sector_nonferrous` | 有色 | 是 |
+| 45 | 沪深300 | `index_csi300` | 沪深300指数、CSI300 | 是 |
+| 46 | 电力 | `sector_power` | 水电、绿电、绿色电力 | 是 |
+| 47 | 储能 | `sector_energy_storage` | 储能产业 | 是 |
+| 48 | 证券保险 | `sector_nonbank` | 非银综合（证券保险等）、非银金融 | 是 |
+| 49 | 黄金 | `gold` | — | 沿用既有资产规则 |
+| 50 | 中证500 | `index_csi500` | 中证500指数、CSI500 | 是 |
+| 51 | 亚太 | `overseas_asia_pacific` | 亚洲市场、东南亚市场 | 是 |
+| 52 | 光伏 | `sector_photovoltaic` | 太阳能 | 是 |
+| 53 | 工程机械 | `sector_construction_machinery` | 工程机械行业 | 是 |
+| 54 | 微盘股 | `style_microcap` | 微盘、小微盘 | 是 |
+| 55 | 机器人 | `sector_robotics` | — | 是 |
+| 56 | 电网设备 | `sector_grid_equipment` | 电力设备、智能电网、电网装备 | 是 |
+| 57 | 量化 | `style_quant` | 量化策略、量化选股 | 是 |
+| 58 | 纳指 | `overseas_nasdaq` | 纳斯达克、纳斯达克100、NASDAQ | 是 |
+| 59 | 商业航天 | `sector_commercial_aerospace` | 商业航天产业 | 是 |
+| 60 | 小微盘量化 | `style_small_micro_quant` | 微盘量化、小盘量化 | 是 |
+| 61 | 先进制造 | `sector_advanced_manufacturing` | 高端制造、智能制造 | 是 |
+| 62 | 存储芯片 | `sector_memory_chip` | 存储半导体、半导体存储、存储器芯片 | 是 |
+| 63 | 军工 | `sector_defense` | 军工与航空航天、国防军工 | 是 |
+| 64 | 黄金股 | `sector_gold_equity` | 黄金股票、黄金矿业、黄金产业、黄金资源 | 是 |
+| 65 | 创业板 | `index_chinext` | 创业板指、创业板50 | 是 |
+| 66 | MLCC | `sector_mlcc` | 多层陶瓷电容、多层片式陶瓷电容 | 是 |
+| 67 | 云计算 | `sector_cloud_computing` | 云服务 | 是 |
+| 68 | 科创板 | `index_star` | 科创50、科创100、科创综指 | 是 |
+| 69 | 消费电子 | `sector_consumer_electronics` | — | 是 |
+| 70 | 大科技 | `sector_technology` | 科技综合、科技、数字经济 | 是 |
+| 71 | 双创50 | `index_dual50` | 中证科创创业50、科创创业50 | 是 |
+| 72 | 算力租赁 | `sector_compute_leasing` | 租赁算力 | 是 |
+| 73 | 人工智能 | `sector_ai` | AI产业、人工智能主题 | 是 |
+| 74 | 传媒游戏 | `sector_media` | 传媒、游戏、影视 | 是 |
+| 75 | 可控核聚变 | `sector_nuclear_fusion` | 核聚变 | 是 |
+| 76 | 国产算力 | `sector_domestic_computing` | 自主算力 | 是 |
+| 77 | 半导体 | `sector_semiconductor` | 芯片、集成电路 | 是 |
+| 78 | 金融科技 | `sector_fintech` | 互联网金融、数字金融、FINTECH | 是 |
+| 79 | AI应用 | `sector_ai_application` | 人工智能应用 | 是 |
+| 80 | 通信 | `sector_communication` | 通讯、5G、6G | 是 |
+| 81 | 半导体材料设备 | `sector_semiconductor_equipment` | 半导体设备、半导体材料、芯片设备 | 是 |
+| 82 | PCB | `sector_pcb` | 印制电路板、印刷电路板 | 是 |
+| 83 | CPO | `sector_cpo` | 光电共封装、光电合封 | 是 |

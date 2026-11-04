@@ -1,0 +1,16 @@
+{
+  "product": "FundPilot AI",
+  "build": "20261102-232130",
+  "variant": "Windows-x64",
+  "private_runtime_data_included": false,
+  "included": [
+    "current frontend",
+    "current Python backend",
+    "tests",
+    "deployment files",
+    "documentation",
+    "Windows Python runtime and dependencies"
+  ],
+  "sms_delivery": "requires operator configuration",
+  "cloud_deployment_performed": false
+}
