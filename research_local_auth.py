@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from cloud_server import CloudHandler
 from research_accounts import AccountError, AccountStore
+from research_captcha import CaptchaStore
 from research_phone_auth import PhoneAuth
 from server import Handler, lan_addresses
 
@@ -79,6 +80,7 @@ class LocalAccountHandler(CloudHandler):
 def enable_local_accounts(service, root):
     service.accounts = AccountStore(root / 'data' / 'accounts.sqlite3')
     service.phone_auth = PhoneAuth(service.accounts)
+    service.captcha = CaptchaStore()
     service.manual_ai, service.manual_ai_lock = None, threading.Lock()
     from research_personal_ai import personalized_runner
     service.auto_engine.ai_runner = personalized_runner(service.accounts.subscriptions)

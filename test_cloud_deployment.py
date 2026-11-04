@@ -37,7 +37,8 @@ class ProxyRateHTTPTests(unittest.TestCase):
             for forged in ('spoof1', 'spoof2'):
                 self.assertEqual(self.request('/api/auth/login', {}, extra={
                     'X-Forwarded-For': forged + ', 198.51.100.8'})[0], 429)
-            self.assertEqual(self.request('/api/auth/login', {}, extra={
+            # A solved image challenge lets the request reach the (mocked) credential check.
+            self.assertEqual(self.request('/api/auth/login', {'username': 'member'}, extra={
                 'X-Forwarded-For': '198.51.100.9'})[0], 401)
 
     def test_direct_client_cannot_bypass_ip_limit_with_xff(self):
@@ -51,7 +52,7 @@ class ProxyRateHTTPTests(unittest.TestCase):
             self.assertEqual(self.request('/api/auth/register', {}, extra={
                 'X-Forwarded-For': '198.51.100.8'})[0], 429)
             with patch.object(self.server.accounts, 'issue_session', return_value=('session', 'csrf')):
-                self.assertEqual(self.request('/api/auth/register', {}, extra={
+                self.assertEqual(self.request('/api/auth/register', {'username': 'proxyuser'}, extra={
                     'X-Forwarded-For': '198.51.100.9'})[0], 200)
             self.prime('registration-global', 200)
             self.assertEqual(self.request('/api/auth/register', {}, extra={

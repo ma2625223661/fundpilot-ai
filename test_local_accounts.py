@@ -18,6 +18,7 @@ class LocalHTTPTests(cloud_tests.CloudHTTPTests):
         shutil.copytree(server.ROOT / 'dist', root / 'dist')
         with patch('server.ROOT', root):
             self.server = server.create_server(0)
+        cloud_tests.install_test_captcha(self.server)
         self.server.auto_engine.close()
         self.server.auto_engine = Mock()
         self.server.auto_engine.status.return_value = {'status':'idle','has_report':False}

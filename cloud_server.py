@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from server import BoundedThreadingHTTPServer, Handler, ROOT
 from research_accounts import AccountError, AccountStore, SESSION_SECONDS
+from research_captcha import CaptchaStore
 from research_phone_auth import PhoneAuth
 from research_ai_config import AIConfigStore, _validate_key, _validate_model, validate_schedule, validate_cost_controls, validate_reasoning_effort, DEFAULT_COST_CONTROLS, DEFAULT_REASONING_EFFORT
 from research_auto import AutoResearchEngine
@@ -214,6 +215,11 @@ class CloudHandler(Handler):
     def redirect_login(self):
         return self.bytes_reply(302, b'', 'text/plain', {'Location': '/login.html'})
 
+    def require_captcha(self, captcha):
+        """Password login, registration and admin setup each consume one image challenge."""
+        if not self.server.captcha.verify(*captcha):
+            raise AccountError('图片验证码不正确或已过期，请输入新的验证码')
+
     def read_json(self):
         lengths = self.headers.get_all('Content-Length', [])
         if len(lengths) != 1 or self.headers.get('Transfer-Encoding'):
@@ -255,7 +261,14 @@ class CloudHandler(Handler):
                                    'setup_token_required': not self.setup_without_token(),
                                    'setup_available': self.setup_permitted(),
                                    'registration_open': self.server.registration_open,
-                                   'phone_auth': self.server.phone_auth.status()})
+                                   'phone_auth': self.server.phone_auth.status(),
+                                   'captcha_required': True})
+        if path == '/api/auth/captcha':
+            try:
+                self.server.accounts.rate_limit('captcha-ip:' + self.client_ip(), 60, 600)
+            except AccountError as error:
+                return self.reply(error.status, {'error': str(error)})
+            return self.reply(200, self.server.captcha.issue())
         if path in {'/' + name for name in PUBLIC_FILES}:
             return super().do_HEAD() if self.command == 'HEAD' else super().do_GET()
         user = self.identity()
@@ -387,6 +400,8 @@ class CloudHandler(Handler):
                 self.server.accounts.rate_limit('auth-ip:' + ip, 150, 600)
             value = self.read_json()
             if public:
+                # Strip before the strict field-set checks below; verified per action.
+                captcha = (value.pop('captcha_id', None), value.pop('captcha_code', None))
                 if path == '/api/auth/sms/send':
                     if set(value) != {'phone', 'purpose'} or value['purpose'] not in ('register', 'login'):
                         raise AccountError('短信请求参数无效')
@@ -400,6 +415,7 @@ class CloudHandler(Handler):
                     if not self.setup_permitted():
                         raise AccountError('请先在运行后台的电脑上创建管理员账号', 403)
                     self.server.accounts.rate_limit('setup', 10, 600)
+                    self.require_captcha(captcha)
                     supplied = value.get('setup_token', '')
                     supplied = supplied if isinstance(supplied, str) else ''
                     valid = self.setup_without_token() or hmac.compare_digest(
@@ -412,6 +428,7 @@ class CloudHandler(Handler):
                         raise AccountError('当前未开放注册，请联系管理员', 403)
                     self.server.accounts.rate_limit('registration-ip:' + ip, 5, 3600)
                     self.server.accounts.rate_limit('registration-global', 200, 3600)
+                    self.require_captcha(captcha)
                     phone_fields = {'phone', 'challenge_id', 'code'}
                     if self.server.phone_auth.required or phone_fields.intersection(value):
                         if set(value) != {'username', 'password', *phone_fields}:
@@ -425,6 +442,7 @@ class CloudHandler(Handler):
                         raise AccountError('短信登录参数无效')
                     account, (token, csrf) = self.server.phone_auth.login(value['phone'], value['challenge_id'], value['code'])
                 else:
+                    self.require_captcha(captcha)
                     account, (token, csrf) = self.server.accounts.login(value.get('username'), value.get('password'), with_session=True)
                 if self.token():
                     self.server.accounts.logout(self.token())
@@ -565,6 +583,7 @@ def create_cloud_server(port=8080, state_dir=None, public_url=None, development=
         service.setup_token = environment.get('FUNDPILOT_SETUP_TOKEN', '')
         service.accounts = AccountStore(folder / 'accounts.sqlite3')
         service.phone_auth = PhoneAuth(service.accounts, environment)
+        service.captcha = CaptchaStore()
         service.manual_ai, service.manual_ai_lock = None, threading.Lock()
         if not development and service.accounts.needs_setup() and len(service.setup_token) < 32:
             raise RuntimeError('首次上线请在平台设置至少 32 个字符的随机 FUNDPILOT_SETUP_TOKEN')

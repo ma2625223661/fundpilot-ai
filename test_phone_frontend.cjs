@@ -41,26 +41,42 @@ test('provider failure never displays success or exposes a usable challenge',asy
   const h=runtime(async()=>{throw new Error('短信未开通');});h.verification.setEnabled(true);h.phone.value='13800138000';await h.send.onclick();
   assert.equal(h.feedback.textContent,'短信未开通');assert.equal(h.send.disabled,true);assert.throws(()=>h.verification.payload(),/先获取/);
 });
-async function loginPage(phoneAuth) {
-  const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
-  const calls=[],replaced=[];const h=runtime();
+async function loginPage(phoneAuth, {loginFails=false}={}) {
+  const elements=new Map();const get=id=>{if(!elements.has(id)){const element=new Element();element.removeAttribute=name=>{delete element[name];};element.focus=()=>{};elements.set(id,element);}return elements.get(id);};
+  const calls=[],replaced=[];const h=runtime();let captchas=0;
   h.context.document={getElementById:get};h.context.AbortSignal=AbortSignal;h.context.location={replace:target=>replaced.push(target)};
-  h.context.fetch=async(path,options)=>{calls.push({path,body:options?.body&&JSON.parse(options.body)});return {ok:true,json:async()=>path==='/api/auth/status'?{needs_setup:false,registration_open:true,phone_auth:phoneAuth}:{user:{id:'test'}}};};
-  vm.runInContext(login,h.context);await new Promise(resolve=>setImmediate(resolve));
+  h.context.fetch=async(path,options)=>{calls.push({path,body:options?.body&&JSON.parse(options.body)});
+    if(path==='/api/auth/status')return {ok:true,json:async()=>({needs_setup:false,registration_open:true,phone_auth:phoneAuth,captcha_required:true})};
+    if(path==='/api/auth/captcha'){captchas++;return {ok:true,json:async()=>({captcha_id:'captcha-'+captchas,image:'data:image/png;base64,AA==',length:6})};}
+    if(loginFails)return {ok:false,json:async()=>({error:'图片验证码不正确或已过期，请输入新的验证码'})};
+    return {ok:true,json:async()=>({user:{id:'test'}})};};
+  vm.runInContext(login,h.context);await new Promise(resolve=>setImmediate(resolve));await new Promise(resolve=>setImmediate(resolve));
   return {get,calls,replaced};
 }
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+test('password login sends the image challenge and a failed attempt loads a fresh one',async()=>{
+  const h=await loginPage({available:false},{loginFails:true});
+  assert.equal(h.get('captchaImg').src,'data:image/png;base64,AA==');
+  h.get('username').value='ma2625223661@gmail.com';h.get('password').value='pass1234';h.get('captchaCode').value=' ab3k7z ';
+  await h.get('authForm').onsubmit({preventDefault(){}});await settle();await settle();
+  const login=h.calls.find(call=>call.path==='/api/auth/login');
+  assert.deepEqual({id:login.body.captcha_id,code:login.body.captcha_code},{id:'captcha-1',code:'ab3k7z'});
+  assert.equal(h.calls.at(-1).path,'/api/auth/captcha');assert.equal(h.get('captchaCode').value,'');
+  assert.match(h.get('authStatus').textContent,/图片验证码/);
+});
 test('unconfigured service keeps legacy registration and disables SMS login',async()=>{
   const h=await loginPage({available:false,registration_required:false,message:'短信验证暂未开通'});
   assert.equal(h.get('smsMethod').disabled,true);assert.match(h.get('phoneNotice').textContent,/暂未开通/);
   h.get('switchMode').onclick();assert.equal(h.get('phoneFields').hidden,true);assert.equal(h.get('submitAuth').disabled,false);
   h.get('username').value='member';h.get('password').value=h.get('confirm').value='test password long enough';
-  await h.get('authForm').onsubmit({preventDefault(){}});
+  h.get('captchaCode').value='AB3K7Z';await h.get('authForm').onsubmit({preventDefault(){}});
   assert.equal(h.calls.at(-1).path,'/api/auth/register');assert.equal('phone' in h.calls.at(-1).body,false);
+  assert.equal(h.calls.at(-1).body.captcha_code,'AB3K7Z');
 });
 test('enabled registration requires a challenge; SMS login hides password inputs',async()=>{
   const h=await loginPage({available:true,registration_required:true});h.get('switchMode').onclick();
   assert.equal(h.get('phoneFields').hidden,false);h.get('password').value=h.get('confirm').value='test password long enough';
-  await h.get('authForm').onsubmit({preventDefault(){}});assert.equal(h.calls.length,1);assert.match(h.get('authStatus').textContent,/手机号/);
+  await h.get('authForm').onsubmit({preventDefault(){}});assert.deepEqual(h.calls.map(call=>call.path),['/api/auth/status','/api/auth/captcha']);assert.match(h.get('authStatus').textContent,/手机号/);
   h.get('switchMode').onclick();h.get('smsMethod').onclick();
   assert.equal(h.get('credentials').hidden,true);assert.equal(h.get('credentials').disabled,true);assert.equal(h.get('phoneFields').hidden,false);
 });

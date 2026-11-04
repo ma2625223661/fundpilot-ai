@@ -11,8 +11,16 @@ from unittest.mock import Mock, patch
 
 from cloud_server import CloudAIConfigStore, create_cloud_server
 from research_accounts import AccountError, AccountStore, IDLE_SECONDS, SESSION_SECONDS, password_hash, password_matches
+from research_captcha import CaptchaStore
 
 PASSWORD = 'test password for isolated tests'
+# HTTP tests solve the real image challenge with a known answer (see CloudHTTPTests.request).
+TEST_CAPTCHA = 'AC3K7Z'
+CAPTCHA_PATHS = {'/api/auth/login', '/api/auth/register', '/api/auth/setup'}
+
+
+def install_test_captcha(service):
+    service.captcha = CaptchaStore(code_factory=lambda: TEST_CAPTCHA)
 
 
 class AccountsTests(unittest.TestCase):
@@ -194,6 +202,7 @@ class CloudHTTPTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.server = create_cloud_server(port=0, state_dir=self.tmp.name, development=True, environ={})
+        install_test_captcha(self.server)
         self.server.auto_engine = Mock()
         self.server.auto_engine.status.return_value = {'status':'idle','has_report':False}
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True); self.thread.start()
@@ -205,7 +214,12 @@ class CloudHTTPTests(unittest.TestCase):
     def cleanup(self):
         self.server.shutdown(); self.server.server_close(); self.thread.join(); self.tmp.cleanup()
 
-    def request(self, path, body=None, cookie=None, csrf=None, extra=None, method=None):
+    def request(self, path, body=None, cookie=None, csrf=None, extra=None, method=None, solve_captcha=True):
+        if (solve_captcha and path in CAPTCHA_PATHS and isinstance(body, dict) and 'username' in body
+                and 'captcha_id' not in body):
+            status, challenge, _ = self.request('/api/auth/captcha', extra=extra)
+            self.assertEqual(status, 200, challenge)
+            body = {**body, 'captcha_id': challenge['captcha_id'], 'captcha_code': TEST_CAPTCHA.lower()}
         connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=10)
         headers = {'Origin':self.origin}
         if cookie: headers['Cookie'] = cookie
@@ -289,6 +303,41 @@ class CloudHTTPTests(unittest.TestCase):
         token, _ = self.server.accounts.issue_session(member['id'])
         self.assertEqual(self.request('/api/admin/user-state',{'user_id':member['id'],'disabled':True},self.admin_cookie,self.admin_csrf)[0],200)
         self.assertIsNone(self.server.accounts.session(token))
+
+    def test_password_login_registration_and_setup_require_a_single_use_image_challenge(self):
+        status, challenge, headers = self.request('/api/auth/captcha')
+        self.assertEqual(status, 200)
+        self.assertEqual(challenge['length'], 6)
+        self.assertTrue(challenge['image'].startswith('data:image/png;base64,iVBORw0KGgo'))
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertNotIn(TEST_CAPTCHA, json.dumps(challenge))
+        self.assertTrue(self.request('/api/auth/status')[1]['captcha_required'])
+        credentials = {'username': 'member', 'password': PASSWORD}
+        for body in (credentials, {**credentials, 'captcha_id': challenge['captcha_id']},
+                     {**credentials, 'captcha_id': 'missing', 'captcha_code': TEST_CAPTCHA}):
+            status, value, _ = self.request('/api/auth/login', body, solve_captcha=False)
+            self.assertEqual(status, 400, body)
+            self.assertIn('图片验证码', value['error'])
+        # The partial attempt above consumed the issued challenge: it cannot be reused.
+        status, _, _ = self.request('/api/auth/login', {**credentials, 'captcha_id': challenge['captcha_id'],
+                                                        'captcha_code': TEST_CAPTCHA}, solve_captcha=False)
+        self.assertEqual(status, 400)
+        fresh = self.request('/api/auth/captcha')[1]
+        wrong = {**credentials, 'captcha_id': fresh['captcha_id'], 'captcha_code': 'ZZZZZZ'}
+        self.assertEqual(self.request('/api/auth/login', wrong, solve_captcha=False)[0], 400)
+        self.assertEqual(self.request('/api/auth/login', {**wrong, 'captcha_code': TEST_CAPTCHA}, solve_captcha=False)[0], 400)
+        good = {**credentials, 'captcha_id': self.request('/api/auth/captcha')[1]['captcha_id'], 'captcha_code': ' ac3k7z '}
+        status, value, _ = self.request('/api/auth/login', good, solve_captcha=False)
+        self.assertEqual(status, 200, value)
+        self.assertEqual(self.request('/api/auth/login', good, solve_captcha=False)[0], 400)
+        self.assertEqual(self.request('/api/auth/register', {'username': 'nocaptcha', 'password': PASSWORD},
+                                      solve_captcha=False)[0], 400)
+        self.assertEqual(self.request('/api/auth/register', {'username': 'withcaptcha', 'password': PASSWORD})[0], 200)
+
+    def test_captcha_issue_is_rate_limited_per_ip(self):
+        statuses = [self.request('/api/auth/captcha', extra={'X-Forwarded-For': '203.0.113.9'})[0] for _ in range(58)]
+        self.assertEqual(set(statuses), {200})
+        self.assertEqual(self.request('/api/auth/captcha')[0], 429)
 
     def test_duplicate_headers_and_large_body_fail_closed(self):
         connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port)
