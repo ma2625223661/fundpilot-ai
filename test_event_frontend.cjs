@@ -124,7 +124,7 @@ test('opening browser history clears live markers and detail explicitly identifi
   sectorIndicator:ui.sectorIndicator,indicatorNode:()=>new Element('CURRENT SIGNAL'),list:(title)=>new Element(title),renderCompanyEvidence:()=>{},link:(title)=>new Element(title),document:{createTextNode:text=>new Element(text)}});
  const from=js.indexOf('  function renderHistory()'),to=js.indexOf("  $('#clearHistory').onclick",from);vm.runInContext(js.slice(from,to),ctx);ctx.renderHistory();$('#historyList').children[0].onclick();
  assert.equal(ctx.report.report_stale,true);assert.equal(ui.sectorIndicator(ctx.report.sector_analysis[0]),null);
- ctx.researchPanels=ui.researchPanels;ctx.researchAdvicePresentation=ui.researchAdvicePresentation;
+ ctx.researchPanels=ui.researchPanels;ctx.researchAdvicePresentation=ui.researchAdvicePresentation;ctx.researchHistoricalAdvicePresentation=ui.researchHistoricalAdvicePresentation;ctx.researchSavedPresentation=ui.researchSavedPresentation;
  const detailFrom=js.indexOf('  function renderIndependentIndex('),detailTo=js.indexOf('  function renderBoards()',detailFrom);vm.runInContext(js.slice(detailFrom,detailTo),ctx);ctx.renderDetail();
  const text=n=>[n.textContent,...n.children.map(text)].join(' '),detail=text($('#sectorDetail'));
  assert.match(detail,/历史板块分析/);assert.match(detail,/历史分析理由/);assert.match(detail,/历史 AI 板块解读/);assert.doesNotMatch(detail,/CURRENT SIGNAL/);

@@ -244,11 +244,17 @@ class ServerAdmissionTests(unittest.TestCase):
                 deadline = time.monotonic() + 1
                 while True:
                     check = self.connect(service)
-                    check.sendall(f'GET /api/health HTTP/1.1\r\nHost: {host}\r\n\r\n'.encode('ascii'))
+                    check.sendall(f'GET /api/health HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n'.encode('ascii'))
                     status = self.response(check).status
+                    check.close()
                     if status == 200:
                         break
                     self.assertEqual(status, 503)
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(.01)
+                # The health probe itself briefly holds the only slot; let its
+                # handler finish before the next subtest opens a connection.
+                while service._request_slots._value < 1:
                     self.assertLess(time.monotonic(), deadline)
                     time.sleep(.01)
         service.auto_engine.start.assert_not_called()

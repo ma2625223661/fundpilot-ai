@@ -41,7 +41,7 @@ class SectorServerTests(unittest.TestCase):
         requests = [urllib.request.Request(self.origin + '/api/research?codes=000001'),
                     urllib.request.Request(self.origin + '/api/analyze', data=b'{"codes":["000001"]}',
                                             headers={'Origin': self.origin, 'Content-Type': 'application/json'})]
-        with patch('server.run_research', side_effect=AssertionError('fund upstream')):
+        with patch('research_service.run_research', side_effect=AssertionError('fund upstream')):
             for request in requests:
                 with self.assertRaises(urllib.error.HTTPError) as error:
                     urllib.request.urlopen(request)

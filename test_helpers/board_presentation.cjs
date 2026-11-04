@@ -13,7 +13,7 @@ function boardHarness(raw){
  }
  const $=id=>{if(!nodes.has(id))nodes.set(id,new Node('div'));return nodes.get(id);};
  const filterGroup=new Node('div');filterGroup.append($('#scarcityFilter'));
- const ctx=vm.createContext({...ui,URL,$,report:ui.normalizeReport(raw),selected:null,group:'all',query:'',sort:'score',onlyScarcity:false,groups:{industry:'行业主题',broad:'宽基指数',overseas:'海外市场',style:'风格策略',defensive:'防守资产',commodity:'商品资产',other:'其他方向'},finite:Number.isFinite,txt:(v,f='')=>typeof v==='string'?v:f,num:(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'*****',el:(...args)=>new Node(...args),setText:(id,value)=>$('#'+id).textContent=value,renderDetail:()=>{},indicatorNode:indicator=>new Node('i',indicator.symbol,'sector-indicator '+indicator.className)});
+ const ctx=vm.createContext({...ui,URL,$,report:ui.normalizeReport(raw),selected:null,group:'all',query:'',sort:'score',onlyScarcity:false,groups:{industry:'行业主题',broad:'宽基指数',overseas:'海外市场',style:'风格策略',defensive:'防守资产',commodity:'商品资产',other:'其他方向'},finite:Number.isFinite,txt:(v,f='')=>typeof v==='string'?v:f,num:(v,d=2)=>Number.isFinite(v)?v.toFixed(d):'*****',el:(...args)=>new Node(...args),setText:(id,value)=>$('#'+id).textContent=value,renderDetail:()=>{},refreshResearchHistory:async()=>true,indicatorNode:indicator=>new Node('i',indicator.symbol,'sector-indicator '+indicator.className)});
  ctx.root={};ctx.document={dispatchEvent:()=>{},createElement:tag=>new Node(tag)};ctx.CustomEvent=class{constructor(type){this.type=type;}};ctx.view=()=>{};
  vm.runInContext(scarcitySource,ctx);ctx.scarcityUI=ctx.FundPilotScarcity;
  const toneStart=source.indexOf('  function applyTone('),toneEnd=source.indexOf('  function list(',toneStart);

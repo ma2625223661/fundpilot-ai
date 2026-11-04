@@ -7,3 +7,7 @@ data/
 .env.*
 !.env.example
 Caddyfile.generated
+# Local-only folders: bundled Windows runtime, migration backups, pre-fix snapshot
+runtime/
+backups/
+_backup_*/

@@ -45,7 +45,7 @@ class ProxyTests(unittest.TestCase):
 
     def test_health_and_page(self):
         with OPEN(self.origin + '/api/health') as r:
-            self.assertEqual(json.load(r)['version'], 5)
+            self.assertEqual(json.load(r)['version'], 6)
         with OPEN(self.origin + '/index.html') as r:
             self.assertIn('sector-research.js', r.read().decode())
             self.assertIn("connect-src 'self'", r.headers['Content-Security-Policy'])
@@ -67,7 +67,7 @@ class ProxyTests(unittest.TestCase):
         request.add_header('Origin', self.origin)
         with OPEN(request) as response:
             self.assertEqual(response.code, 202)
-        engine.request_scan.assert_called_once_with(refresh=False)
+        engine.request_scan.assert_called_once_with(refresh=False, public_only=True)
         del self.server.auto_engine
 
     def test_summary_route_omits_report_and_report_route_negotiates_gzip(self):
@@ -96,30 +96,16 @@ class ProxyTests(unittest.TestCase):
                 self.assertIsNone(response.headers.get('Content-Encoding'))
                 self.assertIn('report', json.load(response))
 
-    @patch('server.run_research')
-    def test_origin_and_parameter_gate_precedes_research(self, research):
-        self.assertEqual(self.send(origin='https://external.invalid')[0], 403)
-        for payload in [{'codes': ['../../../']}, {'prefs': {'pos': -5}}, {'key': 'space key'}, {'prefs': {'min': True}}, {'prefs': {'min': 'nan'}}]:
-            self.assertEqual(self.send(payload)[0], 400)
-        research.assert_not_called()
-
-    @patch('server.run_research')
-    def test_no_manual_context_or_api_key_required(self, research):
-        research.return_value = {'engine': 'quant', 'analysis': {'summary': '自动数据决策'}}
-        code, body = self.send({'codes': ['110020'], 'prefs': DEFAULT_PREFS})
-        self.assertEqual(code, 200)
-        self.assertEqual(body['engine'], 'quant')
-        self.assertEqual(research.call_args.kwargs['key'], '')
-        self.assertEqual(research.call_args.kwargs['context'], '')
-
-    @patch('server.run_research')
-    def test_get_preview_applies_query_preferences_without_paid_key(self, research):
-        research.return_value = {'ok': True}
-        query = urllib.parse.urlencode({'codes': '110020', 'pos': 15, 'min': 80, 'risk': '均衡配置'})
-        with OPEN(self.origin + '/api/research?' + query) as response:
-            self.assertEqual(response.code, 200)
-        self.assertEqual(research.call_args.args[1], {'risk': '均衡配置', 'pos': 15, 'min': 80})
-        self.assertNotIn('key', research.call_args.kwargs)
+    def test_fund_endpoints_are_origin_guarded_and_permanently_gone(self):
+        self.assertEqual(self.send({'codes': ['110020']}, origin='https://external.invalid')[0], 403)
+        code, body = self.send({'codes': ['110020']})
+        self.assertEqual(code, 410)
+        self.assertEqual(body['research_scope'], 'sectors')
+        self.assertEqual(self.send({}, path='/api/unknown')[0], 404)
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            OPEN(self.origin + '/api/research?codes=110020')
+        self.assertEqual(error.exception.code, 410)
+        error.exception.close()
 
     def attach_ai(self, probe=None):
         folder = tempfile.TemporaryDirectory()
@@ -322,24 +308,6 @@ class ProxyTests(unittest.TestCase):
         self.assertFalse(store.status()['configured'])
         probe.assert_not_called()
         self.server.auto_engine.config_changed.assert_not_called()
-
-    @patch('server.run_research', return_value={'engine': 'ai'})
-    def test_manual_uses_verified_saved_key_and_free_preview_does_not(self, research):
-        store = self.attach_ai()
-        secret = 'sk-synthetic-offline-abcd'
-        store.configure(key=secret, model='deepseek-v4-pro', enabled=True)
-        store.verify()
-        code, body = self.send({'codes': ['110020'], 'use_saved_key': True})
-        self.assertEqual(code, 200)
-        self.assertEqual(research.call_args.kwargs['key'], secret)
-        self.assertEqual(research.call_args.kwargs['model'], 'deepseek-v4-pro')
-        self.assertNotIn(secret, json.dumps(body))
-        self.send({'codes': ['110020'], 'use_saved_key': False})
-        self.assertEqual(research.call_args.kwargs['key'], '')
-        with OPEN(self.origin + '/api/research?codes=110020') as response:
-            self.assertEqual(response.code, 200)
-        self.assertNotIn('key', research.call_args.kwargs)
-
 
 class ResearchServiceTests(unittest.TestCase):
     def test_ai_payload_preserves_separate_scores_and_disclosed_holdings_source(self):

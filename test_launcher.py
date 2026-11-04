@@ -144,6 +144,8 @@ class LauncherTests(unittest.TestCase):
 
     def test_share_template_matches_current_launcher(self):
         template = launch.ROOT / 'work/share_templates/launch.py'
+        if not template.is_file():
+            self.skipTest('share template lives in the development workspace, not the release package')
         self.assertEqual(Path(launch.__file__).read_bytes(), template.read_bytes())
 
     def test_owner_extracted_launcher_recognizes_responses(self):

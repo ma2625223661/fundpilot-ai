@@ -1,6 +1,7 @@
 """FundPilot local automatic research server, Python standard library only."""
 import json
 import gzip
+import http.client
 import ipaddress
 import os
 import socket
@@ -13,7 +14,6 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from research_service import DEFAULT_CODES, parse_codes, run_research, validate_prefs, validate_request
 from research_auto import AutoResearchEngine
 from research_ai_config import AIConfigStore
 from research_sectors import run_sector_research
@@ -170,6 +170,18 @@ class Handler(SimpleHTTPRequestHandler):
     def parse_request(self):
         parsed = super().parse_request()
         expired = self.finish_header_deadline()
+        if parsed and self.request_version == 'HTTP/0.9':
+            # HTTP/0.9 replies carry no status line or headers, so a JSON error
+            # would reach the client as a bare body. Refuse with a real status.
+            self.request_version = 'HTTP/1.0'
+            self.close_connection = True
+            if not hasattr(self, 'headers'):
+                self.headers = http.client.HTTPMessage()
+            if expired:
+                self.reply(408, {'error': '请求头读取超时，请重试'})
+            else:
+                self.reply(400, {'error': '不支持的 HTTP 版本'})
+            return False
         if expired:
             self.close_connection = True
             if parsed:
@@ -282,10 +294,8 @@ class Handler(SimpleHTTPRequestHandler):
                 'scope': 'same_network',
             })
         if parsed.path == '/api/health':
-            sectors_only = getattr(self.server, 'research_scope', None) == 'sectors'
-            return self.reply(200, {'ok': True, 'provider': 'DeepSeek', 'version': 6 if sectors_only else 5,
-                                   'research_scope': 'sectors' if sectors_only else 'funds',
-                                   'defaults': [] if sectors_only else list(DEFAULT_CODES),
+            return self.reply(200, {'ok': True, 'provider': 'DeepSeek', 'version': 6,
+                                   'research_scope': 'sectors', 'defaults': [],
                                    'automatic_research': True})
         if parsed.path == '/api/ai/config':
             store = getattr(self.server, 'ai_config', None)
@@ -305,19 +315,8 @@ class Handler(SimpleHTTPRequestHandler):
             summary = parsed.path == '/api/auto/status' and parse_qs(parsed.query).get('summary') == ['1']
             return self.reply(200, engine.status(include_report=False) if summary else engine.status())
         if parsed.path == '/api/research':
-            if getattr(self.server, 'research_scope', None) == 'sectors':
-                return self.reply(410, {'error': '基金研究已移除；当前仅研究板块，请使用 /api/auto/report',
-                                        'research_scope': 'sectors'})
-            try:
-                params = parse_qs(parsed.query)
-                codes = parse_codes(params.get('codes', [''])[0])
-                prefs = validate_prefs({key: params[key][0] for key in ('risk', 'pos', 'min') if key in params})
-                result = run_research(codes, prefs, refresh=params.get('refresh', ['0'])[0] == '1')
-                return self.reply(200, result)
-            except ValueError as error:
-                return self.reply(400, {'error': str(error)})
-            except Exception:
-                return self.reply(503, {'error': '自动研究暂时不可用，请稍后刷新；已有报告仍可回看'})
+            return self.reply(410, {'error': '基金研究已移除；当前仅研究板块，请使用 /api/auto/report',
+                                    'research_scope': 'sectors'})
         if parsed.path.startswith('/api/'):
             return self.reply(404, {'error': '接口不存在'})
         super().do_GET()
@@ -328,7 +327,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(404, {'error': '接口不存在'})
         if not self.valid_host() or self.headers.get('Origin') != 'http://' + self.headers.get('Host', ''):
             return self.reply(403, {'error': '只接受当前站点页面的请求'})
-        if self.path == '/api/analyze' and getattr(self.server, 'research_scope', None) == 'sectors':
+        if self.path == '/api/analyze':
             return self.reply(410, {'error': '基金研究已移除；当前仅研究板块', 'research_scope': 'sectors'})
         if self.path.startswith(('/api/data/', '/api/ai/')) and not self.local_client():
             return self.reply(403, {'error': '请在运行服务的电脑上管理数据与 API 配置；局域网可查看报告'})
@@ -424,22 +423,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(503, {'error': '自动扫描服务尚未初始化'})
             engine.request_scan(refresh=False, public_only=True)
             return self.reply(202, engine.status(include_report=False))
-        try:
-            codes, prefs, key, model, context = validate_request(data)
-            if 'use_saved_key' in data and not isinstance(data['use_saved_key'], bool):
-                raise ValueError('已保存密钥选项无效')
-            store = getattr(self.server, 'ai_config', None)
-            if not key and data.get('use_saved_key', True) and store is not None:
-                saved = store.snapshot()
-                if saved.get('enabled'):
-                    key, model = saved['key'], saved['model']
-        except (ValueError, TypeError, UnicodeError) as error:
-            return self.reply(400, {'error': str(error) or '参数无效，请检查观察池与策略设置'})
-        try:
-            result = run_research(codes, prefs, key=key, model=model, context=context, refresh=data.get('refresh', False))
-            return self.reply(200, result)
-        except Exception:
-            return self.reply(503, {'error': '自动研究暂时不可用，请稍后重试；已有报告仍可回看'})
+        return self.reply(404, {'error': '接口不存在'})
 
 
 def create_server(port=8765, *, require_login=True):

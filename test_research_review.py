@@ -322,7 +322,12 @@ class ReviewHTTPTests(unittest.TestCase):
         self.server.auto_engine.request_scan.assert_not_called()
 
     def test_native_reference_reads_internal_histories_without_publishing_them(self):
-        from test_review_market_evidence import market_report
+        from test_review_market_evidence import market_report, NOW
+        from research_review import ReviewStore
+        # The fixture histories end on 2026-10-30; freeze the review clock so the
+        # "latest 26 closes" window does not drift as real calendar days pass.
+        frozen=patch.object(ReviewStore,'now',lambda self:datetime.fromisoformat(NOW))
+        frozen.start();self.addCleanup(frozen.stop)
         r=market_report()
         user=self.server.accounts.login('owner',PASSWORD)
         self.server.accounts.watchlist(user['id'],'overseas_test','add')

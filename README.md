@@ -44,7 +44,7 @@
 - `research_sector_ai.py`：逐板块 AI 理由、风险、复核条件、证据约束与真实用量。
 - `research_auto.py`：板块模式调度，跳过全部基金研究和分类流程。
 - `server.py`：运行板块模式，原 `/api/research` 和 `/api/analyze` 返回 410。
-- `dist/sector-research.js`、`dist/sector-research.css`：新版页面，不再载入旧基金界面 `app.js`。
+- `dist/sector-research.js`、`dist/sector-research.css`：新版页面。旧基金界面 `app.js` 及其测试已于 2026-11-04 删除。
 - `data/sector-report.json`：最新板块报告；`data/sector-report.schedule.json`：AI 预约状态。
 - `data/deepseek-config.dpapi.json`：当前 Windows 用户 DPAPI 加密配置，密钥不回传浏览器。
 
