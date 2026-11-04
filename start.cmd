@@ -8,7 +8,7 @@ if not exist "%~dp0runtime\python.exe" (
     pause
     exit /b 1
 )
-"%~dp0runtime\python.exe" -B "%~dp0launch.py" %*
+"%~dp0runtime\python.exe" -B "%~dp0launch.py" --reload %*
 set "fundpilot_exit=%errorlevel%"
 if not "%fundpilot_exit%"=="0" pause
 exit /b %fundpilot_exit%

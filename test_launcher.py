@@ -158,5 +158,107 @@ class LauncherTests(unittest.TestCase):
         self.assertTrue(installed.running_service(self.port))
 
 
+
+class FakeChild:
+    def __init__(self, port):
+        self.port, self.returncode = port, None
+
+    def poll(self):
+        return self.returncode
+
+
+class HotReloadTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = __import__('tempfile').TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / 'dist').mkdir()
+        for name in ('server.py', 'research_x.py', 'test_server.py', 'notes.md', 'dist/index.html'):
+            (self.root / name).write_text('x', encoding='utf-8')
+
+    def test_watch_list_covers_backend_code_and_page_names_but_not_tests(self):
+        files = launch.watched_files(self.root)
+        self.assertEqual(set(files), {'server.py', 'research_x.py', 'dist/index.html'})
+        before = dict(files)
+        (self.root / 'dist' / 'index.html').write_text('edited page', encoding='utf-8')
+        self.assertEqual(launch.changed_files(before, launch.watched_files(self.root)), [])
+        (self.root / 'dist' / 'new.js').write_text('x', encoding='utf-8')
+        (self.root / 'test_server.py').write_text('edited test', encoding='utf-8')
+        __import__('os').utime(self.root / 'server.py', ns=(1, 1))
+        self.assertEqual(launch.changed_files(before, launch.watched_files(self.root)), ['dist/new.js', 'server.py'])
+
+    def run_supervisor(self, snapshots, *, crash_at=None, interrupt=False):
+        spawned, stopped, opened = [], [], []
+        def spawn(port):
+            spawned.append(FakeChild(port))
+            return spawned[-1]
+        def snapshot():
+            value = snapshots.pop(0) if len(snapshots) > 1 else snapshots[0]
+            return dict(value)
+        cycle = {'n': 0}
+        def sleep(_):
+            if _ == launch.WATCH_INTERVAL:
+                cycle['n'] += 1
+                if crash_at == cycle['n']:
+                    spawned[-1].returncode = 1
+                if interrupt and cycle['n'] == 3:
+                    raise KeyboardInterrupt
+        args = SimpleNamespace(port=8765, no_browser=False)
+        with patch.object(launch, 'reuse_service', return_value=False), \
+                patch.object(launch, 'open_site', side_effect=lambda url, nb: opened.append(url)), \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            code = launch.supervise(args, sleep=sleep, spawn=spawn, stop=stopped.append, snapshot=snapshot,
+                                    healthy=lambda port: True, max_cycles=6)
+        return code, spawned, stopped, opened, output.getvalue()
+
+    def test_code_change_restarts_the_backend_once_and_opens_the_browser_once(self):
+        a, b = {'server.py': 1}, {'server.py': 2}
+        # initial, cycle1, cycle2(changed), debounce check, then stable.
+        code, spawned, stopped, opened, output = self.run_supervisor([a, a, b, b, b])
+        self.assertEqual(code, 0)
+        self.assertEqual(len(spawned), 2)
+        self.assertEqual(stopped[:1], [spawned[0]])
+        self.assertEqual(stopped[-1], spawned[1])
+        self.assertEqual(opened, ['http://127.0.0.1:8765/index.html'])
+        self.assertIn('检测到修改：server.py', output)
+
+    def test_crashed_backend_waits_for_a_fix_instead_of_looping(self):
+        a, b = {'server.py': 1}, {'server.py': 2}
+        code, spawned, stopped, opened, output = self.run_supervisor([a, a, a, a, b, b], crash_at=2)
+        self.assertIn('网站后台已退出（代码 1）', output)
+        self.assertEqual(len(spawned), 2)  # only the fix triggers a new start
+
+    def test_ctrl_c_stops_the_backend(self):
+        a = {'server.py': 1}
+        code, spawned, stopped, opened, output = self.run_supervisor([a], interrupt=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(stopped, [spawned[0]])
+        self.assertIn('正在停止网站后台', output)
+
+    def test_existing_site_is_reused_instead_of_supervising(self):
+        with patch.object(launch, 'reuse_service', return_value=True), \
+                patch.object(launch, 'spawn_backend') as spawn:
+            self.assertEqual(launch.main(['--reload', '--no-browser']), 0)
+        spawn.assert_not_called()
+
+    def test_child_waits_for_previous_backend_to_release_port(self):
+        busy = OSError(98, 'Address in use')
+        create = Mock(side_effect=[busy, busy, 'server'])
+        sleeps = []
+        self.assertEqual(launch.create_child_server(create, 8765, sleep=sleeps.append, clock=lambda: 0), 'server')
+        self.assertEqual(len(sleeps), 2)
+        with self.assertRaises(OSError):
+            launch.create_child_server(Mock(side_effect=OSError(13, 'denied')), 8765,
+                                       sleep=sleeps.append, clock=iter([0, 99]).__next__)
+
+    def test_child_shuts_down_on_stop_line_or_parent_exit(self):
+        for stream in (io.StringIO('stop\n'), io.StringIO('')):
+            server = Mock()
+            launch.stop_on_parent_signal(server, stream).join(2)
+            server.shutdown.assert_called_once_with()
+
+    def test_start_cmd_enables_hot_reload(self):
+        self.assertIn('launch.py" --reload %*', (launch.ROOT / 'start.cmd').read_text(encoding='utf-8'))
+
 if __name__ == '__main__':
     unittest.main()
