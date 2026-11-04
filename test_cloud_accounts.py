@@ -30,9 +30,19 @@ class AccountsTests(unittest.TestCase):
         self.assertTrue(password_matches(PASSWORD, first))
         self.assertFalse(password_matches('another long password', first))
         self.assertFalse(password_matches(None, password_hash('invalid-password-input')))
-        for value in ['short', 'x' * 129, None]:
+        for value in ['short', 'x' * 7, 'x' * 129, None]:
             with self.assertRaises(AccountError):
                 password_hash(value)
+
+    def test_eight_character_passwords_are_the_minimum_for_everyone(self):
+        eight = 'pass1234'
+        self.assertTrue(password_matches(eight, password_hash(eight)))
+        self.assertFalse(password_matches('pass123', password_hash(eight)))
+        user = self.store.create_user('member8', eight)
+        self.assertEqual(self.store.login('member8', eight)['id'], user['id'])
+        with self.assertRaises(AccountError) as ctx:
+            self.store.create_user('member7', 'x' * 7)
+        self.assertIn('8～128', str(ctx.exception))
 
     def test_login_and_case_insensitive_unique_name(self):
         self.assertEqual(self.store.login('OWNER', PASSWORD), self.admin)

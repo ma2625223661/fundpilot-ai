@@ -24,9 +24,13 @@ class AccountError(Exception):
         self.status = status
 
 
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 128
+
+
 def password_hash(password, salt=None):
-    if not isinstance(password, str) or not 12 <= len(password) <= 128:
-        raise AccountError('密码需为 12～128 个字符，可包含中文、空格和符号')
+    if not isinstance(password, str) or not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH:
+        raise AccountError(f'密码需为 {MIN_PASSWORD_LENGTH}～{MAX_PASSWORD_LENGTH} 个字符，可包含中文、空格和符号')
     salt = salt or secrets.token_bytes(16)
     # OWASP scrypt profile: 32 MiB, three passes. Bound concurrent memory use.
     if not _PASSWORD_SLOTS.acquire(timeout=1):
@@ -40,7 +44,7 @@ def password_hash(password, salt=None):
 
 
 def password_matches(password, encoded):
-    valid_input = isinstance(password, str) and 12 <= len(password) <= 128
+    valid_input = isinstance(password, str) and MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH
     if not valid_input:
         # Match the ordinary expensive failure path without hashing huge input.
         password = 'invalid-password-input'

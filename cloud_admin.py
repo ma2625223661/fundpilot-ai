@@ -11,7 +11,7 @@ def main():
         raise SystemExit('请在已挂载网站持久卷的服务终端中运行。')
     store = AccountStore(Path(folder) / 'accounts.sqlite3')
     username = input('需要重置密码的用户名：').strip()
-    new = getpass.getpass('新密码（12～128 个字符）：')
+    new = getpass.getpass('新密码（8～128 个字符）：')
     if new != getpass.getpass('再次输入新密码：'):
         raise SystemExit('两次密码不一致，未修改。')
     try:

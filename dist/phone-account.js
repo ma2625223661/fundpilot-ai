@@ -20,7 +20,7 @@
       input.id=id;input.type=type;input.autocomplete=autocomplete;input.placeholder=placeholder;input.required=true;l.htmlFor=id;
       if(type==='tel'){input.inputMode='tel';input.maxLength=11;input.pattern='1[3-9][0-9]{9}';}
       if(id==='bindCode'){input.inputMode='numeric';input.maxLength=6;input.pattern='[0-9]{6}';}
-      if(type==='password'){input.minLength=12;input.maxLength=128;}
+      if(type==='password'){input.minLength=8;input.maxLength=128;}
       field.append(l);controls[id]=input;
       if(id==='bindCode'){const row=node('div',undefined,'cloud-phone-code');controls.send=node('button','获取验证码','btn ghost');row.append(input,controls.send);field.append(row);}
       else field.append(input);
