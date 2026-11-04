@@ -60,7 +60,7 @@ def reuse_service(port, no_browser):
         return False
     url = f'http://127.0.0.1:{port}/index.html'
     print(f'网站后台已在运行：{url}', flush=True)
-    print('已复用现有网站，无需重复启动。请保留原后台窗口。', flush=True)
+    print('已复用正在运行的网站，无需重复启动。', flush=True)
     open_site(url, no_browser)
     return True
 
@@ -92,6 +92,67 @@ def self_check():
 
 
 LOG_KEEP_DAYS = 14
+STOP_WAIT_SECONDS = 30
+DETACHED_ENV = 'FUNDPILOT_DETACHED'
+
+
+def stop_request_file(root=None):
+    return Path(root or ROOT) / 'data' / '.reload' / 'stop-site'
+
+
+def running_detached():
+    return os.environ.get(DETACHED_ENV) == '1'
+
+
+def today_log(root=None):
+    return Path(root or ROOT) / 'data' / 'logs' / f'fundpilot-{datetime.now():%Y-%m-%d}.log'
+
+
+def notify(message, *, title='FundPilot AI', wait=False):
+    """Without a console window, problems must still reach the user."""
+    print(message, flush=True)
+    if not running_detached() or os.name != 'nt':
+        return None
+    def show():
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, message, title, 0x40 | 0x10000)  # information, foreground
+        except (AttributeError, OSError):
+            pass
+    thread = threading.Thread(target=show, name='fundpilot-notice', daemon=True)
+    thread.start()
+    if wait:  # the process is about to exit; keep the box on screen until dismissed
+        thread.join()
+    return thread
+
+
+def start_detached(argv):
+    """Re-launch this launcher with no console window and return immediately."""
+    command = [sys.executable, '-B', str(ROOT / 'launch.py')] + [arg for arg in argv if arg != '--background']
+    flags = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == 'nt' else 0
+    subprocess.Popen(command, cwd=str(ROOT), env={**os.environ, DETACHED_ENV: '1'}, creationflags=flags,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=os.name != 'nt')
+    return 0
+
+
+def stop_site(port, *, sleep=time.sleep, clock=time.monotonic, healthy=None, root=None):
+    healthy = healthy or running_service
+    if not healthy(port):
+        print('网站没有在运行。', flush=True)
+        return 0
+    request = stop_request_file(root)
+    request.parent.mkdir(parents=True, exist_ok=True)
+    request.write_text('stop', encoding='utf-8')
+    deadline = clock() + STOP_WAIT_SECONDS
+    while clock() < deadline:
+        sleep(.5)
+        if not healthy(port):
+            print('网站已停止。', flush=True)
+            return 0
+    request.unlink(missing_ok=True)
+    print('未能停止网站：它可能是用旧版带窗口方式启动的，请直接关闭那个命令窗口。', flush=True)
+    return 1
 
 
 class DailyLog:
@@ -257,14 +318,22 @@ def supervise(args, *, sleep=time.sleep, spawn=spawn_backend, stop=stop_backend,
     if reuse_service(args.port, args.no_browser):
         return 0
     clean_stale_controls()
-    print('热更新已开启：保存 .py 文件后，后台会在几秒内自动重启，无需再双击 start.cmd。', flush=True)
-    print('网页文件（dist 文件夹）修改后刷新浏览器即可生效。关闭本窗口或按 Ctrl+C 停止网站。', flush=True)
+    stop_request = stop_request_file()
+    stop_request.unlink(missing_ok=True)
+    print('热更新已开启：保存 .py 文件后，后台会在几秒内自动重启，无需再次启动。', flush=True)
+    print('网页文件（dist 文件夹）修改后刷新浏览器即可生效。' +
+          ('网站在后台运行，双击“停止网站.cmd”可关闭。' if running_detached() else '关闭本窗口或按 Ctrl+C 停止网站。'),
+          flush=True)
     seen = snapshot()
     child, opened, cycles = spawn(args.port), args.no_browser, 0
     try:
         while max_cycles is None or cycles < max_cycles:
             cycles += 1
             sleep(WATCH_INTERVAL)
+            if stop_request.exists():
+                stop_request.unlink(missing_ok=True)
+                print('收到停止请求，正在关闭网站…', flush=True)
+                break
             current = snapshot()
             changed = changed_files(seen, current)
             if changed:
@@ -278,8 +347,8 @@ def supervise(args, *, sleep=time.sleep, spawn=spawn_backend, stop=stop_backend,
                 child = spawn(args.port)
                 continue
             if child is not None and child.poll() is not None:
-                print(f'\n网站后台已退出（代码 {child.returncode}）。请查看上方报错；'
-                      '修复并保存文件后会自动重新启动。', flush=True)
+                notify(f'网站后台已退出（代码 {child.returncode}），网页暂时打不开。\n'
+                       f'报错详情见日志：{today_log()}\n修复并保存代码后会自动重新启动。')
                 child = None
                 continue
             if stalled(child):
@@ -326,6 +395,19 @@ def watch_supervisor(server, control, parent_pid, *, interval=.5, alive=parent_a
     return thread
 
 
+_DUMP_FILE = []
+
+
+def dump_target(root=ROOT):
+    if not running_detached():
+        return sys.__stderr__
+    if not _DUMP_FILE:
+        folder = Path(root) / 'data' / 'logs'
+        folder.mkdir(parents=True, exist_ok=True)
+        _DUMP_FILE.append(open(folder / 'stall-dumps.log', 'a', encoding='utf-8'))
+    return _DUMP_FILE[0]
+
+
 def install_stall_diagnostics(server, control, *, clock=time.monotonic):
     """Heartbeat from the serve loop itself, plus a GIL-independent stack dump if it stalls."""
     import faulthandler
@@ -333,8 +415,9 @@ def install_stall_diagnostics(server, control, *, clock=time.monotonic):
 
     def service_actions():
         try:
-            # The real console handle: sys.stderr may be the DailyLog wrapper.
-            faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, exit=False, file=sys.__stderr__)
+            # The real console handle (sys.stderr may be the DailyLog wrapper); in
+            # background mode the console is hidden, so dumps go to a log file.
+            faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, exit=False, file=dump_target())
         except (AttributeError, OSError, RuntimeError, ValueError):
             pass  # stderr without a file descriptor: skip the dump, keep the heartbeat
         now = clock()
@@ -358,6 +441,9 @@ def main(argv=None):
     parser.add_argument('--local-only', action='store_true',
                         default=os.environ.get('FUNDPILOT_LOCAL_ONLY') == '1',
                         help='只允许本机访问，手机和局域网其他设备无法打开')
+    parser.add_argument('--background', action='store_true', help='不显示窗口，在后台运行网站')
+    parser.add_argument('--console', action='store_true', help='显示命令窗口运行（排查问题时使用）')
+    parser.add_argument('--stop', action='store_true', help='停止在后台运行的网站')
     parser.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--control', help=argparse.SUPPRESS)
     parser.add_argument('--parent-pid', type=int, help=argparse.SUPPRESS)
@@ -366,6 +452,13 @@ def main(argv=None):
         parser.error('端口须为 1～65535 的整数')
     if args.check:
         return self_check()
+    if args.stop:
+        return stop_site(args.port)
+    if args.background and not args.console and not args.child and not running_detached():
+        # Already running: just open it, without spawning a hidden process.
+        if reuse_service(args.port, args.no_browser):
+            return 0
+        return start_detached(sys.argv[1:] if argv is None else list(argv))
     if args.reload and not args.child:
         return supervise(args, spawn=lambda port: spawn_backend(port, local_only=args.local_only))
     url = f'http://127.0.0.1:{args.port}/index.html'
@@ -445,4 +538,7 @@ if __name__ == '__main__':
             print('网站后台启动失败：请根据上面的报错修改代码并保存，热更新会自动重试。', file=sys.stderr)
         else:
             print(f'启动失败：{type(error).__name__}；请运行“检查环境.cmd”查看环境。', file=sys.stderr)
+            if running_detached():
+                notify(f'FundPilot AI 启动失败（{type(error).__name__}）。\n'
+                       f'请双击“检查环境.cmd”，或查看日志：{today_log()}', wait=True)
         raise SystemExit(1)

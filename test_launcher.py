@@ -89,7 +89,7 @@ class LauncherTests(unittest.TestCase):
                 patch.object(launch.webbrowser, 'open') as browser, \
                 patch('sys.stdout', new_callable=io.StringIO) as output:
             self.assertEqual(launch.main(['--port', str(self.port), '--no-browser']), 0)
-            self.assertIn('已复用现有网站', output.getvalue())
+            self.assertIn('已复用正在运行的网站', output.getvalue())
         create.assert_not_called()
         browser.assert_not_called()
 
@@ -320,7 +320,11 @@ class HotReloadTests(unittest.TestCase):
         self.assertIn('没有响应，正在自动重启', output.getvalue())
 
     def test_start_cmd_enables_hot_reload(self):
-        self.assertIn('launch.py" --reload %*', (launch.ROOT / 'start.cmd').read_text(encoding='utf-8'))
+        self.assertIn('launch.py" --reload --background %*', (launch.ROOT / 'start.cmd').read_text(encoding='utf-8'))
+        vbs = (launch.ROOT / '启动网站.vbs').read_bytes()
+        self.assertTrue(vbs.isascii())  # VBScript reads ANSI/UTF-16: keep it encoding-proof
+        self.assertIn(b'launch.py"" --reload --background", 0, False', vbs)  # window style 0 = hidden
+        self.assertIn('--stop', (launch.ROOT / '停止网站.cmd').read_text(encoding='utf-8'))
 
 if __name__ == '__main__':
     unittest.main()
@@ -387,3 +391,77 @@ class OperationsTests(unittest.TestCase):
             self.assertFalse(server.Handler.valid_host(handler))
             handler.server.local_only = False
             self.assertTrue(server.Handler.valid_host(handler))
+
+
+
+class BackgroundModeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = __import__('tempfile').TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def test_background_start_relaunches_without_a_window_and_returns(self):
+        with patch.object(launch, 'reuse_service', return_value=False), \
+                patch.object(launch.subprocess, 'Popen') as popen, patch.dict(launch.os.environ, {}, clear=False):
+            launch.os.environ.pop(launch.DETACHED_ENV, None)
+            self.assertEqual(launch.main(['--reload', '--background', '--port', '8765']), 0)
+        command, options = popen.call_args.args[0], popen.call_args.kwargs
+        self.assertNotIn('--background', command)
+        self.assertIn('--reload', command)
+        self.assertEqual(options['env'][launch.DETACHED_ENV], '1')
+        self.assertEqual(options['stdin'], launch.subprocess.DEVNULL)
+
+    def test_background_start_reuses_a_running_site(self):
+        with patch.object(launch, 'reuse_service', return_value=True), patch.object(launch.subprocess, 'Popen') as popen:
+            launch.os.environ.pop(launch.DETACHED_ENV, None)
+            self.assertEqual(launch.main(['--reload', '--background']), 0)
+        popen.assert_not_called()
+
+    def test_console_flag_keeps_the_visible_window_mode(self):
+        with patch.object(launch, 'supervise', return_value=0) as supervise, patch.object(launch.subprocess, 'Popen') as popen:
+            launch.os.environ.pop(launch.DETACHED_ENV, None)
+            self.assertEqual(launch.main(['--reload', '--background', '--console']), 0)
+        popen.assert_not_called()
+        supervise.assert_called_once()
+
+    def test_stop_writes_a_request_and_waits_for_the_site_to_go_down(self):
+        states = iter([True, True, False])
+        with patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(launch.stop_site(8765, sleep=lambda _: None, healthy=lambda port: next(states), root=self.root), 0)
+        self.assertTrue(launch.stop_request_file(self.root).exists())  # the supervisor consumes it
+        self.assertIn('网站已停止', out.getvalue())
+        with patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(launch.stop_site(8765, healthy=lambda port: False, root=self.root), 0)
+        self.assertIn('没有在运行', out.getvalue())
+        now = iter(range(0, 100, 10))
+        with patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(launch.stop_site(8765, sleep=lambda _: None, clock=lambda: next(now),
+                                              healthy=lambda port: True, root=self.root), 1)
+        self.assertFalse(launch.stop_request_file(self.root).exists())
+        self.assertIn('旧版带窗口', out.getvalue())
+
+    def test_supervisor_honours_the_stop_request(self):
+        spawned, stopped = [], []
+        def spawn(port):
+            spawned.append(FakeChild(port)); return spawned[-1]
+        request = self.root / 'data' / '.reload' / 'stop-site'
+        def sleep(_):
+            request.parent.mkdir(parents=True, exist_ok=True); request.write_text('stop')
+        with patch.object(launch, 'reuse_service', return_value=False), patch.object(launch, 'ROOT', self.root), \
+                patch('sys.stdout', new_callable=io.StringIO) as out:
+            code = launch.supervise(SimpleNamespace(port=8765, no_browser=True), sleep=sleep, spawn=spawn,
+                                    stop=stopped.append, snapshot=lambda: {}, healthy=lambda port: True,
+                                    stalled=lambda child: False, max_cycles=5)
+        self.assertEqual(code, 0)
+        self.assertEqual(stopped, [spawned[0]])
+        self.assertFalse(request.exists())
+        self.assertIn('收到停止请求', out.getvalue())
+
+    def test_background_crash_is_reported_in_a_message_box(self):
+        with patch.dict(launch.os.environ, {launch.DETACHED_ENV: '1'}), patch.object(launch.os, 'name', 'nt'), \
+                patch('sys.stdout', new_callable=io.StringIO):
+            box = Mock()
+            fake = SimpleNamespace(windll=SimpleNamespace(user32=SimpleNamespace(MessageBoxW=box)))
+            with patch.dict(sys.modules, {'ctypes': fake}):
+                launch.notify('网站后台已退出', wait=True)
+        self.assertIn('网站后台已退出', box.call_args.args[1])
