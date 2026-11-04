@@ -208,7 +208,7 @@ class HotReloadTests(unittest.TestCase):
                 patch.object(launch, 'open_site', side_effect=lambda url, nb: opened.append(url)), \
                 patch('sys.stdout', new_callable=io.StringIO) as output:
             code = launch.supervise(args, sleep=sleep, spawn=spawn, stop=stopped.append, snapshot=snapshot,
-                                    healthy=lambda port: True, max_cycles=6)
+                                    healthy=lambda port: True, stalled=lambda child: False, max_cycles=6)
         return code, spawned, stopped, opened, output.getvalue()
 
     def test_code_change_restarts_the_backend_once_and_opens_the_browser_once(self):
@@ -251,11 +251,73 @@ class HotReloadTests(unittest.TestCase):
             launch.create_child_server(Mock(side_effect=OSError(13, 'denied')), 8765,
                                        sleep=sleeps.append, clock=iter([0, 99]).__next__)
 
-    def test_child_shuts_down_on_stop_line_or_parent_exit(self):
-        for stream in (io.StringIO('stop\n'), io.StringIO('')):
-            server = Mock()
-            launch.stop_on_parent_signal(server, stream).join(2)
-            server.shutdown.assert_called_once_with()
+    def test_child_stops_on_stop_file_or_when_the_supervisor_is_gone(self):
+        control = self.root / 'control'
+        control.mkdir()
+        server = Mock()
+        thread = launch.watch_supervisor(server, control, 1, interval=.01, alive=lambda pid: True)
+        server.shutdown.assert_not_called()
+        (control / 'stop').write_text('stop', encoding='utf-8')
+        thread.join(2)
+        server.shutdown.assert_called_once_with()
+        orphan = Mock()
+        launch.watch_supervisor(orphan, self.root / 'other', 1, interval=.01, alive=lambda pid: False).join(2)
+        orphan.shutdown.assert_called_once_with()
+
+    def test_parent_liveness_never_signals_the_process(self):
+        self.assertTrue(launch.parent_alive(__import__('os').getppid()))
+        self.assertFalse(launch.parent_alive(2 ** 22 + 12345))
+
+    def test_serve_loop_heartbeat_and_stall_detection(self):
+        control = self.root / 'control'
+        control.mkdir()
+        server = SimpleNamespace(service_actions=Mock())
+        now = [100.0]
+        actions = launch.install_stall_diagnostics(server, control, clock=lambda: now[0])
+        with patch('faulthandler.dump_traceback_later') as arm:
+            actions(); actions()
+        self.assertEqual(arm.call_count, 2)
+        self.assertEqual(server.service_actions, actions)
+        heartbeat = control / 'heartbeat'
+        self.assertTrue(heartbeat.exists())
+        process = Mock(); process.poll.return_value = None
+        child = launch.Backend(process, control)
+        self.assertFalse(launch.backend_stalled(child))
+        old = __import__('time').time() - launch.STALL_RESTART_SECONDS - 5
+        __import__('os').utime(heartbeat, (old, old))
+        self.assertTrue(launch.backend_stalled(child))
+        heartbeat.unlink()
+        self.assertFalse(launch.backend_stalled(child, now=child.started + 1))
+        self.assertTrue(launch.backend_stalled(child, now=child.started + launch.STARTUP_GRACE_SECONDS + 1))
+        process.poll.return_value = 1
+        self.assertFalse(launch.backend_stalled(child, now=child.started + 999))
+
+    def test_stale_control_folders_from_killed_supervisors_are_removed(self):
+        base = self.root / 'data' / '.reload'
+        stale, live = base / '1-1', base / '2-2'
+        for folder in (stale, live):
+            folder.mkdir(parents=True)
+            (folder / 'heartbeat').write_text('x', encoding='utf-8')
+        old = __import__('time').time() - 3600
+        for path in (stale, stale / 'heartbeat'):
+            __import__('os').utime(path, (old, old))
+        launch.clean_stale_controls(self.root)
+        self.assertFalse(stale.exists())
+        self.assertTrue(live.exists())
+
+    def test_stalled_backend_is_restarted(self):
+        a = {'server.py': 1}
+        spawned, stopped = [], []
+        def spawn(port):
+            spawned.append(FakeChild(port)); return spawned[-1]
+        with patch.object(launch, 'reuse_service', return_value=False), \
+                patch.object(launch, 'open_site'), patch('sys.stdout', new_callable=io.StringIO) as output:
+            launch.supervise(SimpleNamespace(port=8765, no_browser=True), sleep=lambda _: None, spawn=spawn,
+                             stop=stopped.append, snapshot=lambda: dict(a), healthy=lambda port: True,
+                             stalled=lambda child: child is spawned[0], max_cycles=3)
+        self.assertEqual(len(spawned), 2)
+        self.assertEqual(stopped[0], spawned[0])
+        self.assertIn('没有响应，正在自动重启', output.getvalue())
 
     def test_start_cmd_enables_hot_reload(self):
         self.assertIn('launch.py" --reload %*', (launch.ROOT / 'start.cmd').read_text(encoding='utf-8'))

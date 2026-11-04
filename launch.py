@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parent
 WATCH_INTERVAL = 1.0
 CHILD_STOP_TIMEOUT = 20
 CHILD_BIND_RETRY_SECONDS = 15
+HEARTBEAT_SECONDS = 5
+STALL_DUMP_SECONDS = 60       # child prints every thread's stack if its serve loop stops this long
+STALL_RESTART_SECONDS = 90    # supervisor restarts a child whose heartbeat is this old
+STARTUP_GRACE_SECONDS = 180   # first heartbeat may wait for imports and port release
 
 
 def running_service(port):
@@ -109,34 +113,89 @@ def changed_files(before, after):
     return sorted(name for name in before.keys() | after.keys() if before.get(name) != after.get(name))
 
 
+class Backend:
+    """A hot-reload child plus the two files it shares with the supervisor.
+
+    The child never reads stdin: on Windows a thread blocked reading an
+    anonymous pipe can stall the whole process, so stop requests are a file the
+    child polls, and liveness is a heartbeat file touched by its serve loop."""
+
+    def __init__(self, process, control):
+        self.process, self.stop_file, self.heartbeat = process, control / 'stop', control / 'heartbeat'
+        self.control, self.started = control, time.monotonic()
+
+    def poll(self):
+        return self.process.poll()
+
+    @property
+    def returncode(self):
+        return self.process.returncode
+
+
 def spawn_backend(port):
-    command = [sys.executable, '-B', str(ROOT / 'launch.py'), '--child', '--no-browser', '--port', str(port)]
-    # The child stops when it reads a line or EOF on stdin, so it also exits if
-    # this supervisor dies; its output shares this window.
-    return subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.PIPE, text=True)
+    control = ROOT / 'data' / '.reload' / f'{os.getpid()}-{time.monotonic_ns()}'
+    control.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, '-B', str(ROOT / 'launch.py'), '--child', '--no-browser', '--port', str(port),
+               '--control', str(control), '--parent-pid', str(os.getpid())]
+    # Output shares this window; stdin is detached on purpose (see Backend).
+    return Backend(subprocess.Popen(command, cwd=str(ROOT), stdin=subprocess.DEVNULL), control)
 
 
 def stop_backend(child, timeout=CHILD_STOP_TIMEOUT):
     if child is None:
         return
-    for action in (lambda: child.stdin.write('stop\n'), lambda: child.stdin.flush(), lambda: child.stdin.close()):
+    try:
+        child.stop_file.write_text('stop', encoding='utf-8')
+    except OSError:
+        pass
+    try:
+        child.process.wait(timeout)
+    except subprocess.TimeoutExpired:
+        child.process.kill()
+        child.process.wait()
+    for path in (child.stop_file, child.heartbeat):
         try:
-            action()
-        except (OSError, ValueError):
+            path.unlink()
+        except OSError:
             pass
     try:
-        child.wait(timeout)
-    except subprocess.TimeoutExpired:
-        child.kill()
-        child.wait()
+        child.control.rmdir()
+    except OSError:
+        pass
+
+
+def clean_stale_controls(root=ROOT, max_age=600):
+    """Remove control folders left by a supervisor that was killed before cleaning up."""
+    import shutil
+    for folder in (root / 'data' / '.reload').glob('*'):
+        beat = folder / 'heartbeat'
+        try:
+            newest = max(path.stat().st_mtime for path in (folder, beat) if path.exists())
+        except (OSError, ValueError):
+            continue
+        if time.time() - newest > max_age:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def backend_stalled(child, now=None):
+    """True when a running child stopped beating (its serve loop is stuck)."""
+    now = time.monotonic() if now is None else now
+    if child is None or child.poll() is not None:
+        return False
+    try:
+        age = time.time() - child.heartbeat.stat().st_mtime
+    except OSError:
+        return now - child.started > STARTUP_GRACE_SECONDS
+    return age > STALL_RESTART_SECONDS
 
 
 def supervise(args, *, sleep=time.sleep, spawn=spawn_backend, stop=stop_backend, snapshot=watched_files,
-              healthy=running_service, max_cycles=None):
+              healthy=running_service, stalled=backend_stalled, max_cycles=None):
     """Hot reload: run the site in a child process and restart it when code changes."""
     url = f'http://127.0.0.1:{args.port}/index.html'
     if reuse_service(args.port, args.no_browser):
         return 0
+    clean_stale_controls()
     print('热更新已开启：保存 .py 文件后，后台会在几秒内自动重启，无需再双击 start.cmd。', flush=True)
     print('网页文件（dist 文件夹）修改后刷新浏览器即可生效。关闭本窗口或按 Ctrl+C 停止网站。', flush=True)
     seen = snapshot()
@@ -162,6 +221,12 @@ def supervise(args, *, sleep=time.sleep, spawn=spawn_backend, stop=stop_backend,
                       '修复并保存文件后会自动重新启动。', flush=True)
                 child = None
                 continue
+            if stalled(child):
+                print(f'\n网站后台超过 {STALL_RESTART_SECONDS} 秒没有响应，正在自动重启…'
+                      '（上方 Timeout 开头的线程堆栈可用于排查卡住的位置）', flush=True)
+                stop(child)
+                child = spawn(args.port)
+                continue
             if not opened and child is not None and healthy(args.port):
                 open_site(url, False)
                 opened = True
@@ -172,17 +237,54 @@ def supervise(args, *, sleep=time.sleep, spawn=spawn_backend, stop=stop_backend,
     return 0
 
 
-def stop_on_parent_signal(server, stream=None):
-    """Child side of hot reload: shut down cleanly on 'stop' or when the supervisor exits."""
-    def wait():
+def parent_alive(pid):
+    if os.name == 'nt':
+        import ctypes
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, pid)  # SYNCHRONIZE | QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # access denied still means it exists
         try:
-            (stream or sys.stdin).readline()
-        except (OSError, ValueError):
-            pass
+            return kernel32.WaitForSingleObject(ctypes.c_void_p(handle), 0) == 0x102  # WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    return os.getppid() == pid
+
+
+def watch_supervisor(server, control, parent_pid, *, interval=.5, alive=parent_alive):
+    """Child side of hot reload: stop on the supervisor's stop file or when it is gone."""
+    stop_file = Path(control) / 'stop'
+
+    def wait():
+        while not stop_file.exists() and alive(parent_pid):
+            time.sleep(interval)
         server.shutdown()
-    thread = threading.Thread(target=wait, name='fundpilot-reload-stop', daemon=True)
+    thread = threading.Thread(target=wait, name='fundpilot-reload-watch', daemon=True)
     thread.start()
     return thread
+
+
+def install_stall_diagnostics(server, control, *, clock=time.monotonic):
+    """Heartbeat from the serve loop itself, plus a GIL-independent stack dump if it stalls."""
+    import faulthandler
+    heartbeat, original, last = Path(control) / 'heartbeat', server.service_actions, [None]
+
+    def service_actions():
+        try:
+            faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, exit=False)
+        except (AttributeError, OSError, RuntimeError, ValueError):
+            pass  # stderr without a file descriptor: skip the dump, keep the heartbeat
+        now = clock()
+        if last[0] is None or now - last[0] >= HEARTBEAT_SECONDS:
+            try:
+                heartbeat.write_text(str(time.time()), encoding='utf-8')
+                last[0] = now
+            except OSError:
+                pass
+        original()
+    server.service_actions = service_actions
+    return service_actions
 
 
 def main(argv=None):
@@ -192,6 +294,8 @@ def main(argv=None):
     parser.add_argument('--port', type=int, default=int(os.environ.get('FUNDPILOT_PORT', '8765')))
     parser.add_argument('--reload', action='store_true', help='热更新：修改 .py 文件后自动重启后台')
     parser.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--control', help=argparse.SUPPRESS)
+    parser.add_argument('--parent-pid', type=int, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error('端口须为 1～65535 的整数')
@@ -222,7 +326,9 @@ def main(argv=None):
         return 1
     print(f'FundPilot AI 已启动：{url}', flush=True)
     if args.child:
-        stop_on_parent_signal(server)
+        if args.control and args.parent_pid:
+            install_stall_diagnostics(server, args.control)
+            watch_supervisor(server, args.control, args.parent_pid)
     else:
         print('请保持本窗口运行，可最小化。关闭窗口或关机会停止网站。', flush=True)
         print('按 Ctrl+C 可停止；下次开机请再次双击 start.cmd。', flush=True)
@@ -234,6 +340,9 @@ def main(argv=None):
     except KeyboardInterrupt:
         print('\n正在停止网站后台…', flush=True)
     finally:
+        if args.child:
+            import faulthandler
+            faulthandler.cancel_dump_traceback_later()
         server.auto_engine.close()
         server.server_close()
     return 0
