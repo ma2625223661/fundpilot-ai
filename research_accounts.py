@@ -12,7 +12,13 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
-USERNAME = re.compile(r'[a-zA-Z0-9_]{3,32}\Z')
+# A username is either a short handle or an email address (at most 64 characters,
+# the login lookup limit). Email addresses are not verified by this service.
+USERNAME = re.compile(
+    r'(?:[a-zA-Z0-9_]{3,32}'
+    r'|(?=[^@]{1,64}@)(?=.{6,64}\Z)[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?'
+    r'(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,24})\Z')
+USERNAME_RULE = '用户名需为 3～32 位字母、数字或下划线，或不超过 64 个字符的邮箱地址'
 SESSION_SECONDS = 7 * 86400
 IDLE_SECONDS = 86400
 _PASSWORD_SLOTS = threading.BoundedSemaphore(2)
@@ -133,7 +139,7 @@ class AccountStore:
 
     def create_user(self, username, password, admin=False):
         if not isinstance(username, str) or not USERNAME.fullmatch(username):
-            raise AccountError('用户名需为 3～32 位字母、数字或下划线')
+            raise AccountError(USERNAME_RULE)
         encoded = password_hash(password)
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -158,7 +164,7 @@ class AccountStore:
     def create_admin_account(self, username, password):
         """Create the second administrator; plaintext passwords never leave this method."""
         if not isinstance(username, str) or not USERNAME.fullmatch(username):
-            raise AccountError('用户名需为 3～32 位字母、数字或下划线')
+            raise AccountError(USERNAME_RULE)
         encoded = password_hash(password)
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')

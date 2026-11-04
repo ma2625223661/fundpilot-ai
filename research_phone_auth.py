@@ -7,7 +7,7 @@ import re
 import secrets
 import sqlite3
 
-from research_accounts import AccountError, USERNAME, digest_token, password_hash, password_matches
+from research_accounts import AccountError, USERNAME, USERNAME_RULE, digest_token, password_hash, password_matches
 
 CODE_SECONDS = 300
 RESEND_SECONDS = 60
@@ -181,7 +181,7 @@ class PhoneAuth:
         self._ready()
         phone = normalize_phone(phone)
         if not isinstance(username,str) or not USERNAME.fullmatch(username):
-            raise AccountError('用户名需为 3～32 位字母、数字或下划线')
+            raise AccountError(USERNAME_RULE)
         encoded = password_hash(password)
         with self.accounts.connection() as db:
             db.execute('BEGIN IMMEDIATE')

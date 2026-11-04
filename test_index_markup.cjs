@@ -19,3 +19,13 @@ test('index page loads only the sector workspace, never the retired fund UI',()=
   assert.doesNotMatch(html,/["/]app\.js/);
   assert.doesNotMatch(html,/board-opportunity/);
 });
+
+test('login username field accepts a plain handle or an email address',()=>{
+  const html=fs.readFileSync('dist/login.html','utf8');
+  const input=html.match(/<input id="username"[^>]*>/)[0];
+  assert.match(input,/maxlength="64"/);
+  // Browsers compile the pattern attribute with the v flag and anchor it.
+  const re=new RegExp('^(?:'+input.match(/pattern="([^"]*)"/)[1]+')$','v');
+  for(const ok of ['owner','abc_123','ma2625223661@gmail.com','first.last+tag@mail.example.cn'])assert.ok(re.test(ok),ok);
+  for(const bad of ['ab','has space','name@host','@gmail.com','a@b.c'])assert.ok(!re.test(bad),bad);
+});

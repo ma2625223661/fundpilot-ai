@@ -34,6 +34,20 @@ class AccountsTests(unittest.TestCase):
             with self.assertRaises(AccountError):
                 password_hash(value)
 
+    def test_email_addresses_can_register_and_log_in_case_insensitively(self):
+        user = self.store.create_user('Ma2625223661@Gmail.com', PASSWORD)
+        self.assertEqual(user['username'], 'Ma2625223661@Gmail.com')
+        self.assertEqual(self.store.login('ma2625223661@gmail.com', PASSWORD)['id'], user['id'])
+        with self.assertRaises(AccountError):
+            self.store.create_user('MA2625223661@GMAIL.COM', PASSWORD)
+        for invalid in ['@gmail.com', 'name@', 'name@host', 'a@b.c', 'two@@x.com', 'sp ace@x.com',
+                        'x' * 55 + '@gmail.com', '中文@qq.com']:
+            with self.subTest(invalid=invalid), self.assertRaises(AccountError) as ctx:
+                self.store.create_user(invalid, PASSWORD)
+            self.assertIn('邮箱', str(ctx.exception))
+        admin_email = self.store.create_admin_account('second.admin+ops@example.com', PASSWORD)
+        self.assertEqual(admin_email['role'], 'admin')
+
     def test_eight_character_passwords_are_the_minimum_for_everyone(self):
         eight = 'pass1234'
         self.assertTrue(password_matches(eight, password_hash(eight)))
