@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const ui=require('../../src/lib/legacy/research-review.js');
+assert.equal(ui.percent(null),'—');assert.equal(ui.percent(1.25),'+1.25%');assert.equal(ui.percent(-2),'-2%');
+assert.equal(ui.chartPoints([]),'');assert.equal(ui.chartPoints([{value:100},{value:100},{value:100},{value:100},{value:100},{value:100}]).split(' ').length,6);
+assert.deepEqual(ui.summary([{score:null},{score:0,validation:{status:'completed'},ai:{status:'completed'}}]),{total:2,scored:1,verified:1,ai:1});
+const source=fs.readFileSync('dist/research-review.js','utf8'),html=fs.readFileSync('dist/index.html','utf8');
+assert(!source.includes('innerHTML'));assert(!source.includes("method:'POST'"));
+assert(html.includes('id="fiveDayReview"'));assert(html.indexOf('id="fiveDayReview"')<html.indexOf('id="historyList"'));
+assert(source.includes('不扣研究点数'));assert(source.includes('原始研究结论验证'));
+console.log('Review display, missing scores, subscription copy and read-only UI checks passed.');

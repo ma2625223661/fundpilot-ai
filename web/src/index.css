@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Design tokens. This file is the only place colours are defined; components use
+  the semantic utilities below (bg-card, text-rise, ...). No gradients anywhere.
+  Market colours follow the A-share convention: red rises, green falls.
+*/
+:root {
+  --radius: 0.625rem;
+  /* Light: cool off-white canvas, white cards, one blue accent. */
+  --background: #f5f6f8;
+  --foreground: #0f1623;
+  --card: #ffffff;
+  --card-foreground: #0f1623;
+  --popover: #ffffff;
+  --popover-foreground: #0f1623;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0f4;
+  --secondary-foreground: #0f1623;
+  --muted: #eef0f4;
+  --muted-foreground: #5a6475;
+  --accent: #e8effd;
+  --accent-foreground: #1d4fc4;
+  --destructive: #c62828;
+  --border: #e1e4ea;
+  --input: #d6dae2;
+  --ring: #2563eb;
+  /* Market direction, A-share convention: red rises, green falls. Green is used for nothing else. */
+  --rise: #d42b2b;
+  --fall: #0f7f45;
+  --flat: #5a6475;
+  --warning: #a85b00;
+  /* Research tier bands (optimistic / neutral / cautious / avoid). Deliberately not
+     red or green, so a tier is never mistaken for a price move. */
+  --tier-optimistic: #2563eb;
+  --tier-neutral: #556070;
+  --tier-cautious: #a85b00;
+  --tier-avoid: #7a3fe0;
+  --chart-1: #2563eb;
+  --chart-2: #7a3fe0;
+  --chart-3: #a85b00;
+  --chart-4: #0e7490;
+  --chart-5: #5a6475;
+  /* Inset layout: the sidebar shares a slightly deeper canvas with the page frame. */
+  --sidebar: #eceef2;
+  --sidebar-foreground: #0f1623;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2e5eb;
+  --sidebar-accent-foreground: #0f1623;
+  --sidebar-border: #d9dde4;
+  --sidebar-ring: #2563eb;
+}
+
+.dark {
+  /* Dark: neutral near-black, slightly cool; cards lift by tone, not by shadow. */
+  --background: #0b0e14;
+  --foreground: #e6e9ef;
+  --card: #121620;
+  --card-foreground: #e6e9ef;
+  --popover: #161b26;
+  --popover-foreground: #e6e9ef;
+  --primary: #5b9bff;
+  --primary-foreground: #0a1224;
+  --secondary: #1a1f2b;
+  --secondary-foreground: #e6e9ef;
+  --muted: #1a1f2b;
+  --muted-foreground: #8d96a8;
+  --accent: #172440;
+  --accent-foreground: #8fbaff;
+  --destructive: #f26b6b;
+  --border: #232937;
+  --input: #2b3242;
+  --ring: #5b9bff;
+  --rise: #f05a5a;
+  --fall: #2fbf71;
+  --flat: #8d96a8;
+  --warning: #f2a93b;
+  --tier-optimistic: #5b9bff;
+  --tier-neutral: #a3acbd;
+  --tier-cautious: #f2a93b;
+  --tier-avoid: #b69cff;
+  --chart-1: #5b9bff;
+  --chart-2: #b69cff;
+  --chart-3: #f2a93b;
+  --chart-4: #4cc3d9;
+  --chart-5: #8d96a8;
+  --sidebar: #07090d;
+  --sidebar-foreground: #e6e9ef;
+  --sidebar-primary: #5b9bff;
+  --sidebar-primary-foreground: #0a1224;
+  --sidebar-accent: #151a24;
+  --sidebar-accent-foreground: #e6e9ef;
+  --sidebar-border: #1a1f2a;
+  --sidebar-ring: #5b9bff;
+}
+
+@theme inline {
+  --font-sans: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-rise: var(--rise);
+  --color-fall: var(--fall);
+  --color-flat: var(--flat);
+  --color-warning: var(--warning);
+  --color-tier-optimistic: var(--tier-optimistic);
+  --color-tier-neutral: var(--tier-neutral);
+  --color-tier-cautious: var(--tier-cautious);
+  --color-tier-avoid: var(--tier-avoid);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-heading: var(--font-sans);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Component animations (menus, sheets) switch off for people who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Page bottom padding that clears the home indicator on phones. */
+@utility safe-bottom {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
