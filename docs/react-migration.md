@@ -421,7 +421,21 @@
   - `AiAnalysis.tsx`（AI 解读与详细建议）。
 - 拆分用脚本按顶层代码块整体搬移（连同前面的注释），只在跨文件使用的名称上加 export / import，并去掉未使用的导入。
 - 逐行核对：除新增的 4 行转出口外，原有代码一行不少、一行没改。类型检查、UI 规范检查、165 项迁移测试、49 项组件测试和构建都通过。
-- 拆完后最大的是 `AdminSubscriptionsCard.tsx`（300 行），以及没有拆的 `ResearchSettings.tsx`（558 行）、`BoardExplorer.tsx`，以后改到时再拆。
+- 第二轮，方法和逐行核对与第一轮相同：
+  - `settings/ResearchSettings.tsx`（558 行）改为转出口（7 行）。内容拆到 `settings/research-settings/`：
+    - `shared.tsx`：模型名、默认费用与计划、能力文案、推理档位、SectionTitle；
+    - `AiSettings.tsx`；
+    - `DataSettings.tsx`：含 Capability。
+  - `research/BoardExplorer.tsx` 从 610 行减到 191 行，只保留卡片主体和图例。其余移到 `research/board/`：
+    - `board-view.ts`：筛选与排序状态、SortMode、SORT_LABELS；
+    - `lead-sample.tsx`；
+    - `SectorRow.tsx`：手机卡片；
+    - `ScoreGuide.tsx`：口径说明；
+    - `SectorTable.tsx`：桌面表格；
+    - `export-sectors.ts`：CSV 导出。
+  - `BoardExplorer.tsx` 继续转出 `useBoardView`、`BoardView`、`leadSample`，首页和对比页的导入不用改。
+  - 核对结果：除 4 行转出口外，没有丢失或改动任何代码；类型检查、UI 规范、165 项迁移测试、49 项组件测试和构建都通过。
+- 现在最大的文件是 `AiSettings.tsx`（339 行），整个文件就是一个函数组件。继续拆分需要改动它内部的状态和表单结构，不再是纯搬移，所以这次没有做。
 
 **需要负责人用真实配置人工验收（我无法代为操作）**
 1. 真实短信：注册时验证手机、绑定手机号、短信登录。
