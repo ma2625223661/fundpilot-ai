@@ -47,6 +47,19 @@ describe('dashboard', () => {
   });
 });
 
+describe('dashboard tabs', () => {
+  it('splits the homepage into tabs and keeps every section mounted while switching', async () => {
+    renderPage(<DashView />);
+    await screen.findByText('板块机会总览');
+    const names = screen.getAllByRole('tab').map(tab => tab.textContent);
+    expect(names).toEqual(['市场概览', '板块总览', '重要事件', '我的关注与订阅', 'AI 研究']);
+    fireEvent.click(screen.getByRole('tab', { name: '板块总览' }));
+    expect(screen.getByRole('tab', { name: '板块总览' }).getAttribute('aria-selected')).toBe('true');
+    // The overview panel stays in the document (filters and scroll survive a switch).
+    expect(document.getElementById('marketOverview')).toBeTruthy();
+  });
+});
+
 describe('history', () => {
   it('places the five-day review before the saved reports and confirms before clearing', async () => {
     const { container } = renderPage(<HistoryView />);

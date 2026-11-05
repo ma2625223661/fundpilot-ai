@@ -353,7 +353,7 @@ export function BoardExplorer({ board, onOpenDetail }: { board: BoardView; onOpe
           </div>
         )}
         <Tabs value={activeGroup} onValueChange={value => setGroup(String(value))}>
-          <div className="overflow-x-auto border-b border-border">
+          <div className="overflow-x-auto overflow-y-hidden border-b border-border">
             <TabsList variant="line" aria-label="板块分类筛选">
               <TabsTrigger value="all" className="tabular-nums">
                 全部 {sectors.length}

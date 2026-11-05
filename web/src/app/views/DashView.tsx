@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Disclosure } from '@/components/research/common';
 import { AiPanel } from '@/app/research/AiPanel';
 import { BoardExplorer, useBoardView } from '@/app/research/BoardExplorer';
@@ -126,8 +127,15 @@ function ReadingGuide() {
   );
 }
 
-function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ block: 'start' });
+const TAB_KEY = 'fundpilot_dash_tab_v1';
+
+/** The last homepage tab this viewer used (a per-browser convenience only). */
+function readTab() {
+  try {
+    return localStorage.getItem(TAB_KEY) || 'overview';
+  } catch {
+    return 'overview';
+  }
 }
 
 export function DashView() {
@@ -150,96 +158,105 @@ export function DashView() {
   );
 
   const canRefresh = !research.accountMode || session.isAdmin;
-  const shortcuts = (
-    [
-      ['marketOverview', '市场环境', true],
-      ['cloudWatchlist', '我的关注', research.accountMode],
-      ['aiSubscription', '我的订阅', research.accountMode],
-      ['boardExplorer', '板块总览', true],
-    ] as [string, string, boolean][]
-  ).filter(([, , shown]) => shown);
+  const [tab, setTab] = useState(readTab);
+  const chooseTab = (value: string) => {
+    setTab(value);
+    try {
+      localStorage.setItem(TAB_KEY, value);
+    } catch {
+      // Storage unavailable: the choice lasts for this page only.
+    }
+  };
+  const openSector = (id: string) => {
+    board.reset();
+    select(id);
+    setDetailOpen(true);
+  };
+  const tabs: [string, string, boolean][] = [
+    ['overview', '市场概览', true],
+    ['boards', '板块总览', true],
+    ['events', '重要事件', true],
+    ['mine', '我的关注与订阅', research.accountMode],
+    ['ai', 'AI 研究', true],
+  ];
+  const activeTab = tabs.some(([id, , shown]) => id === tab && shown) ? tab : 'overview';
 
   return (
     <>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex max-w-2xl flex-col gap-2">
-          <span className="text-sm font-medium text-primary">板块研究</span>
-          <h1 className="text-3xl font-semibold text-balance">聚焦板块，看清方向</h1>
-          <p className="text-muted-foreground text-pretty">以龙头股和经营数据为主，结合公开公告与官方政策判断板块机会与风险。</p>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col">
+          <h1 className="text-2xl font-semibold text-balance">板块研究</h1>
+          <p className="hidden text-sm text-muted-foreground text-pretty sm:block">
+            以龙头股和经营数据为主，结合公开公告与官方政策判断板块机会与风险。
+          </p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          {canRefresh && (
-            <Button size="lg" onClick={() => void refresh()} disabled={state.status === 'running'}>
-              <RefreshCw aria-hidden="true" />
-              {state.status === 'running' ? '正在更新…' : '更新行情与评分'}
-            </Button>
-          )}
-          <nav aria-label="研究页快捷导航" className="flex flex-wrap justify-end gap-1">
-            {shortcuts.map(([id, label]) => (
-              <Button key={id} variant="ghost" size="sm" onClick={() => scrollTo(id)}>
-                {label}
-              </Button>
-            ))}
-          </nav>
-        </div>
+        {canRefresh && (
+          <Button onClick={() => void refresh()} disabled={state.status === 'running'}>
+            <RefreshCw aria-hidden="true" />
+            {state.status === 'running' ? '正在更新…' : '更新行情与评分'}
+          </Button>
+        )}
       </header>
       {report && <MarketQuotes report={report} />}
       <StatusStrip />
       <ReportNotice />
-      {!report ? (
-        <div className="flex flex-col gap-4" aria-busy="true" aria-label="正在载入板块报告">
-          <div className="grid gap-4 md:grid-cols-2">
-            {[0, 1].map(index => (
-              <Skeleton key={index} className="h-60" />
-            ))}
-          </div>
-          <Skeleton className="h-72" />
+      <Tabs value={activeTab} onValueChange={value => chooseTab(String(value))} className="gap-4">
+        <div className="overflow-x-auto overflow-y-hidden border-b border-border">
+          <TabsList variant="line" aria-label="板块研究分区">
+            {tabs
+              .filter(([, , shown]) => shown)
+              .map(([id, label]) => (
+                <TabsTrigger key={id} value={id} className="px-3 text-sm">
+                  {label}
+                </TabsTrigger>
+              ))}
+          </TabsList>
         </div>
-      ) : (
-        <MarketOverview report={report} />
-      )}
-      <ReadingGuide />
-      {research.accountMode && (
-        <div className="grid items-start gap-4 2xl:grid-cols-3">
-          <div className="2xl:col-span-2">
+        <TabsContent value="overview" keepMounted className="flex flex-col gap-6">
+          {!report ? (
+            <div className="flex flex-col gap-4" aria-busy="true" aria-label="正在载入板块报告">
+              <Skeleton className="h-40" />
+              <Skeleton className="h-72" />
+            </div>
+          ) : (
+            <>
+              <MarketOverview report={report} />
+              <SectorRankings report={report} onOpen={openSector} />
+            </>
+          )}
+        </TabsContent>
+        <TabsContent value="boards" keepMounted className="flex flex-col gap-4">
+          <ReadingGuide />
+          {report ? <BoardExplorer board={board} onOpenDetail={() => setDetailOpen(true)} /> : <Skeleton className="h-96" />}
+        </TabsContent>
+        <TabsContent value="events" keepMounted>
+          {report ? <ImportantEvents /> : <Skeleton className="h-72" />}
+        </TabsContent>
+        {research.accountMode && (
+          <TabsContent value="mine" keepMounted className="flex flex-col gap-4">
             <Watchlist />
-          </div>
-          <SubscriptionProfile />
-        </div>
-      )}
+            <SubscriptionProfile />
+          </TabsContent>
+        )}
+        <TabsContent value="ai" keepMounted>
+          <AiPanel />
+        </TabsContent>
+      </Tabs>
       {report && (
-        <>
-          <SectorRankings
-            report={report}
-            onOpen={id => {
-              board.reset();
-              select(id);
-              setDetailOpen(true);
-            }}
-          />
-          <ImportantEvents />
-          <BoardExplorer
-            board={board}
-            onOpenDetail={() => {
-              setDetailOpen(true);
-            }}
-          />
-          <Sheet open={detailOpen && Boolean(detailSector)} onOpenChange={setDetailOpen}>
-            <SheetContent side="right" size="wide" className="gap-0 p-0" initialFocus={detailHead}>
-              <SheetHeader ref={detailHead} tabIndex={-1} className="border-b border-border pr-12 outline-none">
-                <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
-                <SheetDescription className="sr-only">{(detailSector?.title ?? '') + '：研究依据、数据缺口与公司证据'}</SheetDescription>
-              </SheetHeader>
-              <ScrollArea key={board.current} className="min-h-0 flex-1">
-                <div className="p-4">
-                  <SectorDetail report={report} sectorId={board.current} framed={false} />
-                </div>
-              </ScrollArea>
-            </SheetContent>
-          </Sheet>
-        </>
+        <Sheet open={detailOpen && Boolean(detailSector)} onOpenChange={setDetailOpen}>
+          <SheetContent side="right" size="wide" className="gap-0 p-0" initialFocus={detailHead}>
+            <SheetHeader ref={detailHead} tabIndex={-1} className="border-b border-border pr-12 outline-none">
+              <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
+              <SheetDescription className="sr-only">{(detailSector?.title ?? '') + '：研究依据、数据缺口与公司证据'}</SheetDescription>
+            </SheetHeader>
+            <ScrollArea key={board.current} className="min-h-0 flex-1">
+              <div className="p-4">
+                <SectorDetail report={report} sectorId={board.current} framed={false} />
+              </div>
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
       )}
-      <AiPanel />
     </>
   );
 }

@@ -125,7 +125,7 @@ function SideWatchlist() {
         ) : !watch.items.length ? (
           <div className="mx-2 flex flex-col gap-1 rounded-lg border border-dashed border-sidebar-border p-3 text-xs text-muted-foreground">
             <span className="font-medium text-sidebar-foreground">还没有关注的板块</span>
-            <span className="text-pretty">在板块研究首页添加关注，这里会显示研究分与涨跌。</span>
+            <span className="text-pretty">在板块研究的“我的关注与订阅”分区添加关注，这里会显示研究分与涨跌。</span>
           </div>
         ) : (
           <SidebarMenu className="gap-0.5">

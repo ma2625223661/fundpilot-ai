@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Check, Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DatedLine } from '@/components/charts';
 import { BulletList, Disclosure, Eyebrow, IndicatorIcon, SourceLink, Stat } from '@/components/research/common';
 import { CompanyEvidence } from '@/app/research/CompanyEvidence';
@@ -391,6 +391,10 @@ export function SectorDetail({ report, sectorId, framed = true }: { report: Repo
     ['风险程度', data.riskText],
     ['行情时间', stamp(sector.as_of)],
   ];
+  const hasCompanies = !['bond', 'convertible_bond', 'money_rate'].includes(sector.quote.asset_type);
+  const hasAi =
+    sector.ai_access?.status === 'locked' ||
+    Boolean(sector.ai_analysis && sector.ai_research_status === 'completed' && (report.report_stale || report.ai_research.status !== 'stale'));
   const components = Object.entries(sector.score_components as Record<string, unknown>).filter(([, v]) => finite(v)) as [string, number][];
   const body = (
       <div className="flex flex-col gap-4">
@@ -411,92 +415,120 @@ export function SectorDetail({ report, sectorId, framed = true }: { report: Repo
             历史板块分析 · 报告时间 {stamp(report.as_of)}；以下理由与风险反映当时数据，当前信号已清除。
           </p>
         )}
-        <p className="text-sm text-pretty">{sector.summary}</p>
-        <p className="text-xs text-muted-foreground">研究分用于比较证据强弱，不代表收益概率，不构成投资建议。</p>
-        <ScarcityDetail value={sector.scarcity} />
-        <IndependentIndex sector={sector} />
-        <ScoreSummary sector={sector} />
-        {sector.requirements?.length > 0 && (
-          <div className="grid gap-2 sm:grid-cols-3">
-            {sector.requirements.map((r: Row) => (
-              <div key={r.id || r.label} className="rounded-md bg-muted p-2 text-sm">
-                <b className="font-medium">{r.label}</b>
-                <span className={cn('block text-xs', r.status === 'ok' ? 'text-tier-optimistic' : 'text-warning')}>
-                  {REQUIREMENT[r.status] || '待检查'}
-                </span>
-                <small className="text-xs text-muted-foreground text-pretty">{r.note}</small>
-              </div>
-            ))}
+        <Tabs defaultValue="overview">
+          <div className="-mx-1 overflow-x-auto overflow-y-hidden border-b border-border">
+            <TabsList variant="line" aria-label="板块详情分类">
+              <TabsTrigger value="overview">概览</TabsTrigger>
+              <TabsTrigger value="evidence">研究依据</TabsTrigger>
+              {hasCompanies && <TabsTrigger value="companies">公司样本</TabsTrigger>}
+              <TabsTrigger value="events" className="tabular-nums">
+                相关事件 {related.length}
+              </TabsTrigger>
+              <TabsTrigger value="ai">AI 解读</TabsTrigger>
+            </TabsList>
           </div>
-        )}
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {metrics.map(([label, value]) => {
-            const showIndicator =
-              indicator &&
-              ((label === '趋势判断' && indicator.className === 'trend-strong') || (label === '风险程度' && indicator.className === 'risk-critical'));
-            return (
-              <div key={label} className="rounded-md bg-muted p-2">
-                <dt className="text-xs text-muted-foreground">{historical && label !== '行情时间' ? '历史' + label : label}</dt>
-                <dd
-                  className={cn(
-                    'flex items-center gap-1 font-medium tabular-nums',
-                    label === data.changeLabel && data.hasQuote && !historical && sector.quote.asset_type !== 'money_rate' && DIRECTION_CLASS[direction(sector.change_pct)],
-                  )}
-                >
-                  {showIndicator && <IndicatorIcon indicator={indicator} />}
-                  {value}
-                  {showIndicator ? ' · ' + indicator.label : ''}
-                </dd>
+          <TabsContent value="overview" className="flex flex-col gap-4 pt-4">
+            <p className="text-sm text-pretty">{sector.summary}</p>
+            <p className="text-xs text-muted-foreground">研究分用于比较证据强弱，不代表收益概率，不构成投资建议。</p>
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {metrics.map(([label, value]) => {
+                const showIndicator =
+                  indicator &&
+                  ((label === '趋势判断' && indicator.className === 'trend-strong') || (label === '风险程度' && indicator.className === 'risk-critical'));
+                return (
+                  <div key={label} className="rounded-md bg-muted p-2">
+                    <dt className="text-xs text-muted-foreground">{historical && label !== '行情时间' ? '历史' + label : label}</dt>
+                    <dd
+                      className={cn(
+                        'flex items-center gap-1 font-medium tabular-nums',
+                        label === data.changeLabel && data.hasQuote && !historical && sector.quote.asset_type !== 'money_rate' && DIRECTION_CLASS[direction(sector.change_pct)],
+                      )}
+                    >
+                      {showIndicator && <IndicatorIcon indicator={indicator} />}
+                      {value}
+                      {showIndicator ? ' · ' + indicator.label : ''}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+            <ScoreSummary sector={sector} />
+            {sector.requirements?.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-3">
+                {sector.requirements.map((r: Row) => (
+                  <div key={r.id || r.label} className="rounded-md bg-muted p-2 text-sm">
+                    <b className="font-medium">{r.label}</b>
+                    <span className={cn('block text-xs', r.status === 'ok' ? 'text-tier-optimistic' : 'text-warning')}>
+                      {REQUIREMENT[r.status] || '待检查'}
+                    </span>
+                    <small className="text-xs text-muted-foreground text-pretty">{r.note}</small>
+                  </div>
+                ))}
               </div>
-            );
-          })}
-        </dl>
-        <Diagnostics data={data} report={report} />
-        <ResearchDimensions sector={sector} report={report} />
-        <Section title={historical ? '当时观察与条件' : '后续观察与条件'}>
-          <BulletList items={sector.next_steps} fallback="等待有效公司样本与可靠来源，再复核研究结论。" />
-        </Section>
-        {!['bond', 'convertible_bond', 'money_rate'].includes(sector.quote.asset_type) && (
-          <>
-            <Separator />
-            <CompanyEvidence sector={sector} report={report} />
-          </>
-        )}
-        {sector.ai_access?.status === 'locked' && <SectorAccess sector={sector} report={report} />}
-        <AiAnalysis sector={sector} report={report} />
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <b className="font-medium">行情依据</b>
-          {sector.quote.name && (
-            <span className="text-muted-foreground tabular-nums">
-              {sector.quote.name}
-              {sector.quote.code ? ' · ' + sector.quote.code : ''}
-            </span>
+            )}
+            <ScarcityDetail value={sector.scarcity} />
+          </TabsContent>
+          <TabsContent value="evidence" className="flex flex-col gap-4 pt-4">
+            <IndependentIndex sector={sector} />
+            <ResearchDimensions sector={sector} report={report} />
+            <Section title={historical ? '当时观察与条件' : '后续观察与条件'}>
+              <BulletList items={sector.next_steps} fallback="等待有效公司样本与可靠来源，再复核研究结论。" />
+            </Section>
+            <Diagnostics data={data} report={report} />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <b className="font-medium">行情依据</b>
+              {sector.quote.name && (
+                <span className="text-muted-foreground tabular-nums">
+                  {sector.quote.name}
+                  {sector.quote.code ? ' · ' + sector.quote.code : ''}
+                </span>
+              )}
+              {sector.sources.length ? (
+                sector.sources.map((source: Source) => (
+                  <SourceLink key={source.id} url={source.url}>
+                    {source.name || '查看来源'}
+                  </SourceLink>
+                ))
+              ) : (
+                <span className="text-muted-foreground">暂无可用来源记录</span>
+              )}
+            </div>
+            {sector.score_method && (
+              <Disclosure title="查看评分模型与计算依据">
+                <p className="text-pretty">{sector.score_method}</p>
+                {components.length > 0 && (
+                  <p className="tabular-nums text-pretty">
+                    各项得分：{components.map(([k, v]) => (COMPONENT_LABELS[k] || k) + ' ' + v.toFixed(2)).join('；')}
+                  </p>
+                )}
+              </Disclosure>
+            )}
+          </TabsContent>
+          {hasCompanies && (
+            <TabsContent value="companies" className="pt-4">
+              <CompanyEvidence sector={sector} report={report} />
+            </TabsContent>
           )}
-          {sector.sources.length ? (
-            sector.sources.map((source: Source) => (
-              <SourceLink key={source.id} url={source.url}>
-                {source.name || '查看来源'}
-              </SourceLink>
-            ))
-          ) : (
-            <span className="text-muted-foreground">暂无可用来源记录</span>
-          )}
-        </div>
-        {sector.score_method && (
-          <Disclosure title="查看评分模型与计算依据">
-            <p className="text-pretty">{sector.score_method}</p>
-            {components.length > 0 && (
-              <p className="tabular-nums text-pretty">
-                各项得分：{components.map(([k, v]) => (COMPONENT_LABELS[k] || k) + ' ' + v.toFixed(2)).join('；')}
+          <TabsContent value="events" className="pt-4">
+            <EventList
+              events={related}
+              emptyText={
+                report.event_analysis.status === 'completed'
+                  ? '本轮已评估的证据中，没有与本板块相关、达到展示门槛的事件；不代表全网没有事件。'
+                  : '重要事件尚未完成本轮评估；不代表没有利好或利空。'
+              }
+            />
+          </TabsContent>
+          <TabsContent value="ai" className="flex flex-col gap-4 pt-4">
+            {sector.ai_access?.status === 'locked' && <SectorAccess sector={sector} report={report} />}
+            <AiAnalysis sector={sector} report={report} />
+            {!hasAi && (
+              <p className="text-sm text-muted-foreground text-pretty">
+                本板块暂无可查看的 AI 解读。可在首页“我的关注”中为关注板块生成个人 AI 研究，或等待管理员的公共研究计划。
               </p>
             )}
-          </Disclosure>
-        )}
-        {related.length > 0 && (
-          <Section title="相关重要事件">
-            <EventList events={related} emptyText="" />
-          </Section>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
   );
   if (!framed) return <div id="sectorDetail">{body}</div>;
