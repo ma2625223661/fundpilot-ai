@@ -16,7 +16,8 @@ import { useWatchlist } from '@/app/research/WatchlistContext';
 import { goTo } from '@/app/navigation';
 import { sectorResearch } from '@/lib/research';
 import { DIRECTION_CLASS, direction, stamp } from '@/lib/format';
-import { TONE_BORDER, TONE_TEXT, sectorTone, sourceMap, type Report, type Sector } from '@/lib/report';
+import { TONE_BORDER, TONE_TEXT, sectorTone, sectorTrend, sourceMap, type Report, type Sector } from '@/lib/report';
+import { Sparkline } from '@/components/sparkline';
 import { cn } from '@/lib/utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -222,6 +223,7 @@ function WatchCard({ id, report, busy, onOpen, onRemove }: { id: string; report:
         : '研究已更新';
   const changeTone = !historical && data.hasQuote ? direction(sector.change_pct) : 'unknown';
   const view = sectorResearch.companyScoreView(sector);
+  const trend = sectorTrend(sector);
   return (
     <article className={cn('flex flex-col gap-3 rounded-lg border border-l-4 border-border p-3', TONE_BORDER[tone])}>
       <div className="flex items-center justify-between gap-2">
@@ -253,6 +255,18 @@ function WatchCard({ id, report, busy, onOpen, onRemove }: { id: string; report:
           {data.dataTimeText && <small className="text-xs text-muted-foreground tabular-nums">{data.dataTimeText}</small>}
         </div>
       </div>
+      {trend && (
+        <div className="flex flex-col gap-1">
+          <Sparkline
+            points={trend.points}
+            label={`${title}样本指标近 ${trend.points.length} 个交易日走势，${trend.from} 至 ${trend.to}${trend.intraday ? '，末点为盘中估值' : ''}；非官方指数`}
+          />
+          <small className="text-xs text-muted-foreground tabular-nums">
+            样本指标近 {trend.points.length} 个交易日 · 截至 {trend.to}
+            {trend.intraday ? '（末点为盘中估值）' : ''}
+          </small>
+        </div>
+      )}
       {view && <Breakdown sector={sector} historical={historical} />}
       <div className="flex flex-wrap gap-2 text-xs">
         <Badge variant={/高|特大/.test(data.riskText) ? 'destructive' : 'outline'}>

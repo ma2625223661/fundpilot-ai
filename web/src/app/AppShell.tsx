@@ -38,7 +38,8 @@ import { useSubscription } from '@/app/research/SubscriptionContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { sectorResearch } from '@/lib/research';
 import { DIRECTION_CLASS, direction, finite, stamp } from '@/lib/format';
-import { TONE_TEXT, sectorTone, type Sector } from '@/lib/report';
+import { TONE_TEXT, sectorTone, sectorTrend, type Sector } from '@/lib/report';
+import { Sparkline } from '@/components/sparkline';
 import type { Session } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
@@ -136,6 +137,7 @@ function SideWatchlist() {
               const sector = sectors.get(id);
               const data = sector ? sectorResearch.sectorDataPresentation(sector, { historical }) : null;
               const changeTone = sector && data?.hasQuote && !historical ? direction(sector.change_pct) : 'unknown';
+              const trend = sector ? sectorTrend(sector, 20) : null;
               return (
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton
@@ -154,6 +156,7 @@ function SideWatchlist() {
                         {data ? (data.hasScore ? '研究分 ' + data.scoreText : '待评估') : '报告未包含'}
                       </span>
                     </span>
+                    {trend && <Sparkline points={trend.points} className="h-6 w-12 shrink-0" />}
                     <span className={cn('shrink-0 text-sm font-semibold tabular-nums', DIRECTION_CLASS[changeTone])}>
                       {data && data.hasQuote ? data.changeText : '—'}
                     </span>

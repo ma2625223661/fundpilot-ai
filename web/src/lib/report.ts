@@ -72,3 +72,18 @@ export function sourceMap(report: Report | null): Map<string, Source> {
 export function sectorEvents(report: Report, sectorId: string): ResearchEvent[] {
   return report.event_analysis.events.filter((event: ResearchEvent) => event.sector_ids.includes(sectorId));
 }
+
+/**
+ * The last `days` points of a sector's own sample index (daily closes, plus the
+ * intraday estimate when there is one), for small trend lines. Sectors without
+ * an independent sample index have no history in the report and get null.
+ */
+export function sectorTrend(sector: Sector, days = 60) {
+  const index = sector.custom_index;
+  const history: { date: string; value: number }[] = index?.history ?? [];
+  if (!history.length) return null;
+  const live = index.live_point as { date: string; value: number } | null;
+  const points = (live ? [...history.filter(point => point.date !== live.date), live] : history).slice(-days);
+  if (points.length < 2) return null;
+  return { points, from: points[0].date, to: points[points.length - 1].date, intraday: Boolean(live) };
+}
