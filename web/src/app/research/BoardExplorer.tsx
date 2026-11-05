@@ -336,7 +336,7 @@ function SectorTable({
                     >
                       {sector.title}
                     </Button>
-                    <span className="block max-w-52 truncate text-xs text-muted-foreground" title={data.subtitle}>
+                    <span className="block max-w-28 truncate text-xs text-muted-foreground 2xl:max-w-52" title={data.subtitle}>
                       {data.subtitle}
                     </span>
                   </TableCell>
@@ -344,14 +344,15 @@ function SectorTable({
                   <TableCell className="hidden xl:table-cell">
                     <LeadSample report={report} sector={sector} />
                   </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
+                  {/* Below 1536px the tier label drops under the score instead of widening the table. */}
+                  <TableCell className="text-right whitespace-normal 2xl:whitespace-nowrap">
                     <span className={cn('text-base font-semibold tabular-nums', TONE_TEXT[tone])}>{data.scoreText}</span>
-                    {view && <span className={cn('ml-1 rounded-sm px-1 py-0.5 text-xs', TONE_BADGE[tone])}>{view.label}</span>}
+                    {view && <span className={cn('ml-1 inline-block rounded-sm px-1 py-0.5 text-xs whitespace-nowrap', TONE_BADGE[tone])}>{view.label}</span>}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.fundamentals?.points) : '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.trend?.points) : '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.catalysts?.observed_adjustment, true) : '—'}</TableCell>
-                  <TableCell className="text-xs">
+                  <TableCell className="text-xs whitespace-normal">
                     <span className="relative z-10 flex items-center gap-1">
                       {indicator && <IndicatorIcon indicator={indicator} />}
                       {data.riskText}
