@@ -406,6 +406,23 @@
   - 新增"新版界面"一节，介绍热力图、独立板块页、对比、变动提醒、搜索、导出和添加到主屏幕。
 - 远程仓库与 CI：本仓库还没有配置远程地址，等负责人提供后再推送并补 CI，CI 内容见计划。
 
+**拆分大组件（2026-11-05，纯结构调整，行为不变）**
+- `settings/AccountSettings.tsx`（722 行）改为只做转出口（8 行），原有导入路径不变。各卡片拆到独立文件：
+  - `account-shared.tsx`：`Row` 类型、带离线提示的 `api()`、`PasswordInput`；
+  - `PasswordCard.tsx`；
+  - `PhoneCard.tsx`；
+  - `HelpCards.tsx`：订阅帮助与手机访问；
+  - `AdminSubscriptionsCard.tsx`：含重置密码表单。
+- `research/SectorDetail.tsx` 从 619 行减到 227 行，只保留标签页主体。各部分移到 `research/sector-detail/`：
+  - `parts.tsx`（Section、Sources、Row）；
+  - `IndependentIndex.tsx`；
+  - `ScoreSummary.tsx`（分项条形与档位条件）；
+  - `Evidence.tsx`（研究维度与数据诊断）；
+  - `AiAnalysis.tsx`（AI 解读与详细建议）。
+- 拆分用脚本按顶层代码块整体搬移（连同前面的注释），只在跨文件使用的名称上加 export / import，并去掉未使用的导入。
+- 逐行核对：除新增的 4 行转出口外，原有代码一行不少、一行没改。类型检查、UI 规范检查、165 项迁移测试、49 项组件测试和构建都通过。
+- 拆完后最大的是 `AdminSubscriptionsCard.tsx`（300 行），以及没有拆的 `ResearchSettings.tsx`（558 行）、`BoardExplorer.tsx`，以后改到时再拆。
+
 **需要负责人用真实配置人工验收（我无法代为操作）**
 1. 真实短信：注册时验证手机、绑定手机号、短信登录。
 2. 真实 AI 连接：设置页保存并核验服务商配置；交易日 09:20、14:50 的计划研究按时运行，费用记录正确。
