@@ -75,6 +75,8 @@
 
 `node --test test_sector_frontend.cjs`
 
+后端测试请用项目自带的运行环境执行，它已安装 `requirements.txt` 中的依赖（如解析中证、国证官方成分 XLS 的 `xlrd`）：`runtime\python.exe -B -m unittest discover -p "test_*.py"`（全量约 4 分钟）。系统自带的 `python` 没装这些依赖时，成分股归属相关的测试（`test_sector_member_additions`、`test_research_public_data`、`test_research_theme_memberships`）会因 `No module named 'xlrd'` 失败，这不是代码问题；要用系统 Python，先运行 `python -m pip install -r requirements.txt`。
+
 测试使用模拟来源和合成密钥，不调用真实付费接口。另通过本地服务真实报告和浏览器页面检查，确认范围为 `sectors`，没有基金、净值或持仓来源。
 
 ## 自建龙头样本指标
