@@ -9,13 +9,14 @@ import { arr, stamp } from '@/lib/format';
 import type { AiConfig, AutoState, Report, Sector } from '@/lib/report';
 import type { Session } from '@/lib/session';
 import { normalizeChanges } from '@/lib/changes';
+import { expandSourceRefs } from '@/lib/source-refs';
 
 /**
- * normalizeReport() keeps only the fields it knows, so the backend's change block
- * is validated and re-attached. A report that was already normalized keeps its block.
+ * Sector source ids are expanded first (see source-refs.ts). normalizeReport() keeps
+ * only the fields it knows, so the backend's change block is validated and re-attached. A report that was already normalized keeps its block.
  */
 function withChanges(source: Report | null | undefined, input: Report): Report | null {
-  const next = sectorResearch.normalizeReport(input);
+  const next = sectorResearch.normalizeReport(expandSourceRefs(input));
   if (!next) return next;
   const block = source?.sector_changes;
   return { ...next, sector_changes: block && typeof block === 'object' && 'baselineAsOf' in block ? block : normalizeChanges(block) };

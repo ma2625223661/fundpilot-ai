@@ -349,7 +349,8 @@ class CloudHandler(Handler):
                     value['ai_config'] = {**value['ai_config'], 'key_hint': ''}
             if isinstance(value.get('report'), dict):
                 value = dict(value)
-                value['report'] = client_report_view(self.member_report(value['report'], user))
+                value['report'] = client_report_view(self.member_report(value['report'], user),
+                                                     compact_sources=getattr(getattr(self.server, 'frontend', None), 'kind', None) == 'react')
             value = dict(value)
             value['ai_subscription'] = self.server.accounts.subscriptions.summary(user['id'])
             if value.get('report_version'):

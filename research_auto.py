@@ -561,7 +561,7 @@ def run_auto_research(progress=None, previous=None, refresh=False):
                           'runs_while_server_online': True, 'trade_execution': False}}
 
 
-def client_report_view(report):
+def client_report_view(report, *, compact_sources=False):
     """Browser payload: drop what the page never reads.
 
     Each sample company carries ~120 adjusted closes, and the sector cards repeat
@@ -588,6 +588,35 @@ def client_report_view(report):
     if isinstance(evidence, dict) and isinstance(evidence.get('sector_leaders'), dict):
         view['company_evidence'] = {**evidence, 'sector_leaders': {key: strip(rows)
                                     for key, rows in evidence['sector_leaders'].items()}}
+    if compact_sources:
+        view = compact_sector_sources(view)
+    return view
+
+
+def compact_sector_sources(view):
+    """Send each sector source as its id when snapshot.sources holds the identical record.
+
+    Sectors repeat the same source records (2832 copies of 1344 ids, ~1.7 MB),
+    and every one of them is already in snapshot.sources. Only the React page,
+    which expands the ids again before reading the report, receives this form;
+    a record without an identical snapshot copy is sent in full.
+    """
+    snapshot = view.get('snapshot')
+    sectors = view.get('sector_analysis')
+    if not isinstance(snapshot, dict) or not isinstance(sectors, list):
+        return view
+    shared = {row['id']: row for row in snapshot.get('sources') or []
+              if isinstance(row, dict) and isinstance(row.get('id'), str)}
+
+    def compact(rows):
+        if not isinstance(rows, list):
+            return rows
+        return [row['id'] if isinstance(row, dict) and shared.get(row.get('id')) == row else row for row in rows]
+    view = dict(view)
+    view['sector_analysis'] = [{**sector, 'sources': compact(sector['sources'])}
+                               if isinstance(sector, dict) and 'sources' in sector else sector
+                               for sector in sectors]
+    view['source_refs'] = 'snapshot'
     return view
 
 

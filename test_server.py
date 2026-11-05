@@ -437,3 +437,20 @@ class ClientReportViewTests(unittest.TestCase):
         self.assertIn('history', report['sector_analysis'][0]['leaders'][0])
         self.assertIn('history', report['company_evidence']['sector_leaders']['sector_liquor'][0])
         self.assertIsNone(client_report_view(None))
+
+    def test_react_payload_sends_shared_sector_sources_as_ids(self):
+        from research_auto import client_report_view
+        shared = {'id': 'quote:liquor', 'name': '白酒行情', 'url': 'https://example.com/q', 'status': 'ok'}
+        own = {'id': 'only:sector', 'name': '仅板块持有', 'url': None, 'status': 'ok'}
+        changed = {**shared, 'id': 'quote:bond', 'status': 'error'}
+        report = {'snapshot': {'sources': [shared, {**changed, 'status': 'ok'}]},
+                  'sector_analysis': [{'id': 'sector_liquor', 'sources': [shared, own, changed]}, {'id': 'x'}]}
+        view = client_report_view(report, compact_sources=True)
+        # Identical snapshot copy -> id; no copy or a different copy -> full record.
+        self.assertEqual(view['sector_analysis'][0]['sources'], ['quote:liquor', own, changed])
+        self.assertEqual(view['sector_analysis'][1], {'id': 'x'})
+        self.assertEqual(view['source_refs'], 'snapshot')
+        # The legacy page and the cached report keep full records.
+        self.assertEqual(client_report_view(report)['sector_analysis'][0]['sources'], [shared, own, changed])
+        self.assertNotIn('source_refs', client_report_view(report))
+        self.assertEqual(report['sector_analysis'][0]['sources'][0], shared)

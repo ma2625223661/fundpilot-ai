@@ -319,7 +319,8 @@ class Handler(SimpleHTTPRequestHandler):
             if summary:
                 return self.reply(200, engine.status(include_report=False))
             value = engine.status()
-            return self.reply(200, {**value, 'report': client_report_view(value.get('report'))})
+            return self.reply(200, {**value, 'report': client_report_view(
+                value.get('report'), compact_sources=getattr(getattr(self.server, 'frontend', None), 'kind', None) == 'react')})
         if parsed.path == '/api/research':
             return self.reply(410, {'error': '基金研究已移除；当前仅研究板块，请使用 /api/auto/report',
                                     'research_scope': 'sectors'})
