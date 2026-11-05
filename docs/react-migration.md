@@ -435,7 +435,19 @@
     - `export-sectors.ts`：CSV 导出。
   - `BoardExplorer.tsx` 继续转出 `useBoardView`、`BoardView`、`leadSample`，首页和对比页的导入不用改。
   - 核对结果：除 4 行转出口外，没有丢失或改动任何代码；类型检查、UI 规范、165 项迁移测试、49 项组件测试和构建都通过。
-- 现在最大的文件是 `AiSettings.tsx`（339 行），整个文件就是一个函数组件。继续拆分需要改动它内部的状态和表单结构，不再是纯搬移，所以这次没有做。
+- 第三轮：拆分 `AiSettings.tsx`（339 行 → 150 行）。这一轮不是纯搬移，而是把单个组件拆成状态与展示两部分：
+  - `ai-form.ts`：
+    - 表单类型与 `useAiForm()`：编辑前显示已保存的值，保存后清空密钥框；
+    - 文案函数 `savedSummary()`、`calendarSummary()`；
+    - 预算校验 `budgetLimits()`。
+  - `AiSections.tsx`：服务介绍 `ServicePitch`，以及 01 研究深度、02 研究时间、03 用量预算三段。三段都只负责显示和上报修改，原来的 `!canManage || busy` 合并为一个 `locked` 参数。
+  - `AiSettings.tsx` 保留状态、保存和"检查连接"，以及卡片外框与按钮行。
+- 验证：
+  - 新增 `tests/components/ai-settings.test.tsx`（3 项），覆盖已保存的值填入表单、保存时的请求内容（密钥留空则保留已存密钥，接口地址去掉首尾空格，计划和预算字段齐全）、请求上限为空时不发请求并提示。
+  - 这 3 项和原有 7 项设置页测试，分别在拆分前和拆分后的 `AiSettings` 上运行，结果都是 10 项全部通过。
+  - 另外核对：原文件中 65 处中文文案、全部元素 id 和样式类名在新文件里都还在。
+  - 全部组件测试 52 项、165 项迁移测试、UI 规范和构建都通过。
+- 拆完后 `settings` 目录下没有超过 300 行的文件；`research` 目录下仍有 5 个超过 300 行，这一轮没有动：`FiveDayReview.tsx`（528 行）、`Watchlist.tsx`（390 行）、`MarketOverview.tsx`（380 行）、`SubscriptionContext.tsx`（357 行）、`ResearchContext.tsx`（350 行）。
 
 **需要负责人用真实配置人工验收（我无法代为操作）**
 1. 真实短信：注册时验证手机、绑定手机号、短信登录。
