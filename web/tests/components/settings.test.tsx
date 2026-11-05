@@ -1,7 +1,7 @@
 // Replaces the markup checks on dist/index.html settings (test_index_markup,
 // test_ai_cost_frontend, test_cloud_frontend, test_sector_frontend).
 import { describe, expect, it } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { SettingsView } from '@/app/views/SettingsView';
 import { baseReplies, renderPage, session } from './harness';
 
@@ -35,10 +35,20 @@ describe('settings page', () => {
   it('shows the free data sources and never asks for a paid data token', async () => {
     const { container } = renderPage(<SettingsView />);
     await screen.findByText('BaoStock 数据连接');
+    // Data connections live in their own settings tab.
+    fireEvent.click(screen.getByRole('tab', { name: '数据连接' }));
     expect(container.textContent).toContain('中证官方成分名单 + 腾讯公司行情 + 东方财富财务');
     expect(screen.getByRole('button', { name: /检查多源连接/ })).toBeTruthy();
     expect(container.querySelector('#dataToken')).toBeNull();
     expect(container.textContent).not.toMatch(/Token 购买|输入数据 Token/);
+  });
+
+  it('opens the tab an old deep link points to', async () => {
+    history.replaceState(null, '', '#mobileAccess');
+    renderPage(<SettingsView />);
+    await screen.findByText('AI 研究与执行计划');
+    expect(screen.getByRole('tab', { name: '订阅帮助与手机访问' }).getAttribute('aria-selected')).toBe('true');
+    history.replaceState(null, '', '#');
   });
 
   it('keeps public settings read-only for someone who may not manage them', async () => {

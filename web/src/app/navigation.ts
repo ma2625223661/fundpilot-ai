@@ -18,7 +18,7 @@ export const VIEWS: ViewEntry[] = [
 ];
 
 // Old links point at sections inside the settings page (for example #mobileAccess).
-export const SETTINGS_ANCHORS = ['mobileAccess', 'researchSettings', 'researchDataSettings', 'aiSupport'];
+export const SETTINGS_ANCHORS = ['mobileAccess', 'researchSettings', 'researchDataSettings', 'aiSupport', 'cloudAccount', 'aiSubscriptionAdmin'];
 
 /** The location hash selects the view, so old bookmarks such as /index.html#cycle keep working. */
 export function viewFromHash(hash: string): ViewId {

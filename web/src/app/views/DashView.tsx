@@ -1,12 +1,13 @@
 // The sector research home page (the old #dash view).
 import { useEffect, useRef, useState } from 'react';
-import { CircleAlert, CircleCheck, History, LoaderCircle, Radio, RefreshCw, Sparkles } from 'lucide-react';
+import { CircleAlert, CircleCheck, History, LoaderCircle, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Disclosure } from '@/components/research/common';
 import { AiPanel } from '@/app/research/AiPanel';
@@ -30,7 +31,28 @@ const STATUS_TITLE: Record<string, string> = {
   error: '本轮板块研究暂未完成',
 };
 
-/** Research job, quote refresh and AI schedule in one strip, each with its own time. */
+/** One status item: icon, label and time on one line; the longer explanation sits in a hover hint. */
+function StatusItem({ icon: Icon, tone, label, time, hint }: { icon: LucideIcon; tone?: string; label: string; time?: string; hint: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            className="flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+          />
+        }
+      >
+        <Icon className={cn('size-4 shrink-0', tone || 'text-muted-foreground')} aria-hidden="true" />
+        <span className="truncate font-medium">{label}</span>
+        {time && <span className="shrink-0 text-muted-foreground tabular-nums">{time}</span>}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-sm text-pretty">{hint}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Research job, quote refresh and AI schedule on one line, each with its own time. */
 function StatusStrip() {
   const { state } = useResearch();
   const live = state.public_refresh;
@@ -44,43 +66,38 @@ function StatusStrip() {
       : state.status === 'ready' && state.ai_research?.public_refresh
         ? '行情、量化评分与市场指标已更新；本轮未发起新的 AI 研究。'
         : txt(state.stage, '后台自动采集板块行情、市场新闻并生成分析。');
-  const Icon = problem ? CircleAlert : running ? LoaderCircle : CircleCheck;
+  const short = (value: unknown) => (value ? stamp(value).replace(/^\d{4}\//, '') : '');
+  const schedule = [state.completed_at ? '最近完成 ' + stamp(state.completed_at) : '', state.next_run_at ? '下次更新 ' + stamp(state.next_run_at) : '']
+    .filter(Boolean)
+    .join(' · ');
   return (
-    <Card size="sm" aria-label="研究状态与更新计划">
-      <CardContent className="grid gap-4 md:grid-cols-3 md:divide-x md:divide-border">
-        <div className="flex items-start gap-3" role="status">
-          <Icon className={cn('mt-0.5 size-5 shrink-0', problem ? 'text-destructive' : 'text-primary')} aria-hidden="true" />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <strong className="font-semibold">{title}</strong>
-            <span className="text-sm text-muted-foreground text-pretty">{detail}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {[state.completed_at ? '最近完成 ' + stamp(state.completed_at) : '', state.next_run_at ? '下次更新 ' + stamp(state.next_run_at) : '']
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          </div>
+    <Card size="sm" aria-label="研究状态与更新计划" className="py-2">
+      <CardContent className="flex flex-col gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2" role="status">
+          <StatusItem
+            icon={problem ? CircleAlert : running ? LoaderCircle : CircleCheck}
+            tone={problem ? 'text-destructive' : 'text-primary'}
+            label={title}
+            time={state.next_run_at ? '下次 ' + short(state.next_run_at) : undefined}
+            hint={detail + (schedule ? '（' + schedule + '）' : '')}
+          />
+          <StatusItem
+            icon={Radio}
+            label={live?.running ? '正在更新行情' : txt(live?.label, '行情动态更新')}
+            time={live?.completed_at ? '刷新 ' + short(live.completed_at) : undefined}
+            hint={
+              '行情与量化评分盘中每 5 分钟更新，不调用 AI，0 Token。' +
+              (live ? (live.next_run_at ? '下次采集 ' + stamp(live.next_run_at) + '。' : '交易日历核验后恢复。') : '午间、休市暂停；收盘补采。')
+            }
+          />
+          <StatusItem
+            icon={Sparkles}
+            label="AI 深度研究"
+            time="交易日 09:20 / 14:50"
+            hint="AI 深度研究独立运行，只在 A 股交易日 09:20、14:50 进行；复用未变化的解读，不重复调用。"
+          />
         </div>
-        <div className="flex items-start gap-3 md:pl-4">
-          <Radio className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div className="flex flex-col gap-0.5">
-            <strong className="font-semibold">{live?.running ? '正在更新行情与量化评分' : txt(live?.label, '行情动态更新')}</strong>
-            <span className="text-xs text-muted-foreground">行情与量化评分盘中每 5 分钟 · 不调用 AI，0 Token</span>
-            <span className="text-sm text-muted-foreground tabular-nums">
-              {live ? (live.completed_at ? '最近刷新 ' + stamp(live.completed_at) : '等待首次有效采集') : '正在读取更新计划'}
-            </span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {live ? (live.next_run_at ? '下次采集 ' + stamp(live.next_run_at) : '交易日历核验后恢复') : '午间、休市暂停；收盘补采'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-start gap-3 md:pl-4">
-          <Sparkles className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div className="flex flex-col gap-0.5">
-            <strong className="font-semibold">AI 深度研究独立运行</strong>
-            <span className="text-sm text-muted-foreground tabular-nums">A 股交易日 09:20 / 14:50</span>
-            <span className="text-xs text-muted-foreground">复用解读不重复调用</span>
-          </div>
-        </div>
+        {problem && <p className="text-sm text-destructive text-pretty">{detail}</p>}
       </CardContent>
     </Card>
   );

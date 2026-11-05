@@ -173,8 +173,8 @@ function SectorTable({
   let previous: string | null = null;
   return (
     <div className="hidden md:block">
-      <Table>
-        <TableHeader>
+      <Table containerClassName="max-h-dvh overflow-y-auto rounded-lg border border-border">
+        <TableHeader className="sticky top-0 z-20 bg-card shadow-xs">
           <TableRow>
             <SortHead label="板块" mode="name" sort={sort} setSort={setSort} />
             <SortHead label="涨跌幅" mode="change" sort={sort} setSort={setSort} className="text-right" />
@@ -223,12 +223,14 @@ function SectorTable({
             return (
               <Fragment key={sector.id}>
                 {heading}
-                <TableRow data-state={sector.id === current ? 'selected' : undefined}>
+                <TableRow data-state={sector.id === current ? 'selected' : undefined} className="relative cursor-pointer">
                   <TableCell className={cn('border-l-4 py-2', TONE_BORDER[tone])}>
+                    {/* The name button stretches over the whole row, so any click on the row
+                        opens the detail while keyboard users still reach one real button. */}
                     <Button
                       variant="link"
                       aria-haspopup="dialog"
-                      className="h-auto p-0 text-sm font-semibold text-foreground"
+                      className="h-auto p-0 text-sm font-semibold text-foreground after:absolute after:inset-0"
                       onClick={() => onOpen(sector.id)}
                     >
                       {sector.title}
@@ -246,7 +248,7 @@ function SectorTable({
                   <TableCell className="text-right tabular-nums">{view ? part(parts.trend?.points) : '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.catalysts?.observed_adjustment, true) : '—'}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">
-                    <span className="flex items-center gap-1">
+                    <span className="relative z-10 flex items-center gap-1">
                       {indicator && <IndicatorIcon indicator={indicator} />}
                       {data.riskText}
                     </span>

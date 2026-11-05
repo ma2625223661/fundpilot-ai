@@ -1,7 +1,8 @@
 // Port of mountProfile / drawProfile / drawCreditPolicy / drawLedger in
 // dist/ai-subscription.js: credits, expiry, unlocked count, reasoning depth
 // choice and the last 30 credit changes.
-import { Check, RefreshCw } from 'lucide-react';
+import { Check, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { goTo } from '@/app/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,32 @@ export function SubscriptionProfile() {
   const p = current ? subscriptions.presentation(current) : null;
   const choice = current ? subscriptions.reasoningChoice(current) : null;
   const admin = session.isAdmin;
+  // An administrator has no personal credits to show; point to what an admin manages instead.
+  if (admin)
+    return (
+      <Card id="aiSubscription" size="sm">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+              <b className="font-semibold">管理员账号 · AI 服务统一管理</b>
+            </span>
+            <span className="text-sm text-muted-foreground text-pretty">
+              查看和生成 AI 解读不扣个人额度。用户的研究额度、有效期与暂停在用户管理中操作；共享研究的推理强度在 AI 研究设置中选择。
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => goTo('aiSubscriptionAdmin')}>
+              <Users aria-hidden="true" />
+              管理用户订阅与额度
+            </Button>
+            <Button variant="ghost" onClick={() => goTo('researchSettings')}>
+              调整推理强度
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
   return (
     <Card id="aiSubscription">
       <CardHeader>

@@ -1,31 +1,53 @@
-// The control centre (the old #settings view). Public settings are editable only
-// by an administrator on the machine that runs the site (or the cloud admin).
-import { useEffect } from 'react';
-import { Info, Smartphone } from 'lucide-react';
+// The control centre (the old #settings view), split into tabs. Public settings
+// are editable only by an administrator on the machine that runs the site (or
+// the cloud admin). Old deep links such as #mobileAccess open the right tab.
+import { useEffect, useState } from 'react';
+import { Info } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { SETTINGS_ANCHORS } from '@/app/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/page-header';
 import { useResearch } from '@/app/research/ResearchContext';
 import { AiSettings, DataSettings } from '@/app/settings/ResearchSettings';
 import { AdminSubscriptionsCard, MobileAccessCard, PasswordCard, PhoneCard, SupportCard } from '@/app/settings/AccountSettings';
 
-function jump(id: string) {
-  document.getElementById(id)?.scrollIntoView({ block: 'start' });
-  history.replaceState(null, '', '#' + id);
-}
+type SettingsTab = 'ai' | 'data' | 'account' | 'help' | 'users';
+
+// Which tab each old section anchor lives in.
+const ANCHOR_TAB: Record<string, SettingsTab> = {
+  researchSettings: 'ai',
+  researchDataSettings: 'data',
+  cloudAccount: 'account',
+  aiSupport: 'help',
+  mobileAccess: 'help',
+  aiSubscriptionAdmin: 'users',
+};
 
 export function SettingsView() {
   const { session, accountMode, reloadData } = useResearch();
   const canManage = session.access.can_manage_settings === true;
+  const anchor = location.hash.slice(1);
 
-  // Entering the page refreshes the data connection state; old deep links
-  // (#mobileAccess and friends) scroll to their section.
+  // A deep link picks the tab; afterwards the person's own choice stands until
+  // the link changes again (derived during render, not in an effect).
+  const [state, setState] = useState(() => ({ anchor, tab: ANCHOR_TAB[anchor] ?? ('ai' as SettingsTab) }));
+  if (state.anchor !== anchor) setState({ anchor, tab: ANCHOR_TAB[anchor] ?? state.tab });
+
+  const tabs: [SettingsTab, string, boolean][] = [
+    ['ai', 'AI 研究', true],
+    ['data', '数据连接', true],
+    ['account', '账号与安全', accountMode],
+    ['help', '订阅帮助与手机访问', true],
+    ['users', '用户管理', accountMode && session.isAdmin],
+  ];
+  const tab = tabs.some(([id, , shown]) => id === state.tab && shown) ? state.tab : 'ai';
+
+  // Entering the page refreshes the data connection state; a deep link scrolls to its card.
   useEffect(() => {
     void reloadData();
-    const anchor = location.hash.slice(1);
-    if (SETTINGS_ANCHORS.includes(anchor)) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
   }, [reloadData]);
+  useEffect(() => {
+    if (anchor in ANCHOR_TAB) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
+  }, [anchor]);
 
   const remoteNote =
     session.access.scope === 'cloud'
@@ -36,50 +58,47 @@ export function SettingsView() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="控制中心"
-        title="模型与数据设置"
-        description="选择研究深度与执行计划，管理数据连接和个人账号。"
-        actions={
-          <Button variant="outline" onClick={() => jump('mobileAccess')}>
-            <Smartphone aria-hidden="true" />
-            手机访问
-          </Button>
-        }
-      />
-      <nav aria-label="设置页快捷导航" className="flex flex-wrap gap-2">
-        {(
-          [
-            ['researchSettings', 'AI 研究'],
-            ['researchDataSettings', '数据连接'],
-            ['aiSupport', '订阅与帮助'],
-            ...(accountMode ? [['cloudAccount', '账号与密码']] : []),
-          ] as [string, string][]
-        ).map(([id, label]) => (
-          <Button key={id} size="sm" variant="outline" onClick={() => jump(id)}>
-            {label}
-          </Button>
-        ))}
-      </nav>
+      <PageHeader eyebrow="控制中心" title="模型与数据设置" description="选择研究深度与执行计划，管理数据连接和个人账号。" />
       {!canManage && (
         <Alert>
           <Info aria-hidden="true" />
           <AlertDescription className="text-pretty">{remoteNote}</AlertDescription>
         </Alert>
       )}
-      <AiSettings canManage={canManage} />
-      <DataSettings canManage={canManage} />
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <SupportCard />
-        <MobileAccessCard />
-      </div>
-      {accountMode && (
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <PasswordCard />
-          <PhoneCard />
+      <Tabs value={tab} onValueChange={value => setState({ anchor, tab: value as SettingsTab })} className="gap-4">
+        <div className="overflow-x-auto overflow-y-hidden border-b border-border">
+          <TabsList variant="line" aria-label="设置分类">
+            {tabs
+              .filter(([, , shown]) => shown)
+              .map(([id, label]) => (
+                <TabsTrigger key={id} value={id} className="px-3 text-sm">
+                  {label}
+                </TabsTrigger>
+              ))}
+          </TabsList>
         </div>
-      )}
-      {accountMode && session.isAdmin && <AdminSubscriptionsCard />}
+        <TabsContent value="ai" keepMounted>
+          <AiSettings canManage={canManage} />
+        </TabsContent>
+        <TabsContent value="data" keepMounted className="flex flex-col gap-4">
+          <DataSettings canManage={canManage} />
+        </TabsContent>
+        {accountMode && (
+          <TabsContent value="account" keepMounted className="grid items-start gap-4 lg:grid-cols-2">
+            <PasswordCard />
+            <PhoneCard />
+          </TabsContent>
+        )}
+        <TabsContent value="help" keepMounted className="grid items-start gap-4 lg:grid-cols-2">
+          <SupportCard />
+          <MobileAccessCard />
+        </TabsContent>
+        {accountMode && session.isAdmin && (
+          <TabsContent value="users" keepMounted>
+            <AdminSubscriptionsCard />
+          </TabsContent>
+        )}
+      </Tabs>
       <footer className="text-xs text-muted-foreground text-pretty">
         FundPilot AI · 板块研究，可查证、可解释、可复盘。未评分方向可查看具体数据缺口。
       </footer>

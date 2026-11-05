@@ -1,6 +1,10 @@
 // Port of eventCard / eventList / renderEvents. Impact scores carry their sign
 // in the text; scores are compared, never read as probabilities.
+import { Info } from 'lucide-react';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { goTo } from '@/app/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Disclosure, IndicatorIcon, SourceLink } from '@/components/research/common';
 import { VerificationDetail } from '@/app/research/Scarcity';
@@ -85,7 +89,7 @@ export function EventList({ events, emptyText }: { events: ResearchEvent[]; empt
 }
 
 export function ImportantEvents() {
-  const { report, config, state } = useResearch();
+  const { report, config, state, session } = useResearch();
   const analysis = report?.event_analysis || sectorResearch.normalizeEvents(null);
   const events: ResearchEvent[] = analysis.events;
   const schedule = sectorResearch.eventScheduleText(config?.schedule || state.ai_schedule);
@@ -101,6 +105,7 @@ export function ImportantEvents() {
             ? '事件研究等待下一次交易日时段，当前不补造事件影响分。'
             : analysis.summary ||
               `仅保留影响分绝对值 ≥ ${analysis.threshold} 的事件；利好为正分，利空为负分，双向影响单独标注。影响分不是涨跌概率。`;
+  const notConfigured = !report?.report_stale && analysis.status === 'not_configured' && !events.length;
   return (
     <Card id="importantEvents">
       <CardHeader>
@@ -118,20 +123,41 @@ export function ImportantEvents() {
             颜色按 A 股习惯：利好为红色正分，利空为绿色负分。
           </span>
         </div>
-        <p role="status" className="text-sm text-muted-foreground text-pretty">
-          {status}
-        </p>
-        {analysis.summary && analysis.summary !== status && (
-          <p className="text-sm text-muted-foreground text-pretty">{analysis.summary}</p>
+        {notConfigured ? (
+          // One notice instead of three paragraphs: what is missing, what it means, how to fix it.
+          <Alert>
+            <Info aria-hidden="true" />
+            <AlertTitle>事件研究尚未启用</AlertTitle>
+            <AlertDescription className="text-pretty">
+              {analysis.candidate_count > 0 ? `已采集 ${analysis.candidate_count} 条公告或政策，等待 AI 评估影响。` : '开启并验证 AI 后才会评估事件影响。'}
+              在此之前，公司研究分不含事件维度，只显示阶段分（满分 70），不进入完整档位。
+            </AlertDescription>
+            {session.isAdmin && (
+              <AlertAction>
+                <Button size="sm" variant="outline" onClick={() => goTo('researchSettings')}>
+                  去开启 AI 研究
+                </Button>
+              </AlertAction>
+            )}
+          </Alert>
+        ) : (
+          <>
+            <p role="status" className="text-sm text-muted-foreground text-pretty">
+              {status}
+            </p>
+            {analysis.summary && analysis.summary !== status && (
+              <p className="text-sm text-muted-foreground text-pretty">{analysis.summary}</p>
+            )}
+            <EventList
+              events={events}
+              emptyText={
+                analysis.status === 'completed'
+                  ? '本轮没有达到中等影响标准的事件。'
+                  : '暂无完成评估的重要事件；待按计划采集可靠公告、政策及公司证据后更新。'
+              }
+            />
+          </>
         )}
-        <EventList
-          events={events}
-          emptyText={
-            analysis.status === 'completed'
-              ? '本轮没有达到中等影响标准的事件。'
-              : '暂无完成评估的重要事件；待按计划采集可靠公告、政策及公司证据后更新。'
-          }
-        />
         <p className="text-xs text-muted-foreground tabular-nums">
           {['completed', 'stale', 'expired'].includes(analysis.status) ? '事件报告时间：' : '事件状态更新时间：'}
           {stamp(analysis.as_of || report?.as_of)} · {schedule}
