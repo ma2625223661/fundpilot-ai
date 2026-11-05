@@ -18,6 +18,7 @@ import { sectorResearch } from '@/lib/research';
 import { DIRECTION_CLASS, direction, stamp } from '@/lib/format';
 import { TONE_BORDER, TONE_TEXT, sectorTone, sectorTrend, sourceMap, type Report, type Sector } from '@/lib/report';
 import { Sparkline } from '@/components/sparkline';
+import { ChangeLine } from '@/app/research/Changes';
 import { cn } from '@/lib/utils';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -255,6 +256,7 @@ function WatchCard({ id, report, busy, onOpen, onRemove }: { id: string; report:
           {data.dataTimeText && <small className="text-xs text-muted-foreground tabular-nums">{data.dataTimeText}</small>}
         </div>
       </div>
+      <ChangeLine sectorId={sector.id} />
       {trend && (
         <div className="flex flex-col gap-1">
           <Sparkline

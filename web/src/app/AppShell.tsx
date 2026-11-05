@@ -35,11 +35,13 @@ import { VIEWS, goTo, type ViewId } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
 import { researchStatus } from '@/app/research/research-status';
 import { CompareTray } from '@/app/research/Compare';
+import { ChangesBell } from '@/app/research/Changes';
+import { sectorChange } from '@/lib/changes';
 import { useCompareList } from '@/app/research/compare-store';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { sectorResearch } from '@/lib/research';
-import { DIRECTION_CLASS, direction, finite, stamp } from '@/lib/format';
+import { DIRECTION_CLASS, direction, finite, num, stamp } from '@/lib/format';
 import { TONE_TEXT, sectorTone, sectorTrend, type Sector } from '@/lib/report';
 import { Sparkline } from '@/components/sparkline';
 import type { Session } from '@/lib/session';
@@ -140,6 +142,7 @@ function SideWatchlist() {
               const data = sector ? sectorResearch.sectorDataPresentation(sector, { historical }) : null;
               const changeTone = sector && data?.hasQuote && !historical ? direction(sector.change_pct) : 'unknown';
               const trend = sector ? sectorTrend(sector, 20) : null;
+              const change = sectorChange(report, id);
               return (
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton
@@ -156,6 +159,11 @@ function SideWatchlist() {
                       <span className="truncate text-sm font-medium">{sector?.title ?? id}</span>
                       <span className={cn('text-xs tabular-nums', sector ? TONE_TEXT[sectorTone(sector, historical)] : 'text-muted-foreground')}>
                         {data ? (data.hasScore ? '研究分 ' + data.scoreText : '待评估') : '报告未包含'}
+                        {change?.scoreDelta ? (
+                          <span className={cn('ml-1', DIRECTION_CLASS[direction(change.scoreDelta)])}>
+                            {(change.scoreDelta > 0 ? '+' : '') + num(change.scoreDelta)}
+                          </span>
+                        ) : null}
                       </span>
                     </span>
                     {trend && <Sparkline points={trend.points} className="h-6 w-12 shrink-0" />}
@@ -315,6 +323,7 @@ export function AppShell({ session, view, children }: { session: Session; view: 
             <span className="md:hidden">
               <SectorSearchTrigger compact onOpen={() => setSearchOpen(true)} />
             </span>
+            <ChangesBell />
             <ThemeToggle />
           </div>
         </header>

@@ -1035,6 +1035,10 @@ class AutoResearchEngine:
                                                     report.get('analysis', {}), report.get('strategy'),
                                                     references=report.get('candidate_references', []),
                                                     reference_catalog=report.get('snapshot', {}).get('funds', []))
+            if self.research_scope == 'sectors':
+                # Day-over-day evidence changes for watchlist alerts (never raises).
+                from research_changes import apply_changes
+                apply_changes(report, self.state_path)
             completed = now_iso()
             try:
                 self._persist(report, completed)

@@ -8,6 +8,18 @@ import { sectorHistory, sectorResearch } from '@/lib/research';
 import { arr, stamp } from '@/lib/format';
 import type { AiConfig, AutoState, Report, Sector } from '@/lib/report';
 import type { Session } from '@/lib/session';
+import { normalizeChanges } from '@/lib/changes';
+
+/**
+ * normalizeReport() keeps only the fields it knows, so the backend's change block
+ * is validated and re-attached. A report that was already normalized keeps its block.
+ */
+function withChanges(source: Report | null | undefined, input: Report): Report | null {
+  const next = sectorResearch.normalizeReport(input);
+  if (!next) return next;
+  const block = source?.sector_changes;
+  return { ...next, sector_changes: block && typeof block === 'object' && 'baselineAsOf' in block ? block : normalizeChanges(block) };
+}
 
 const HISTORY_KEY = 'fundpilot_sector_history_v1';
 const RETIRED_KEYS = ['fundpilot_history_v3', 'fundpilot_history_v2', 'fundpilot_codes_v3', 'fundpilot_constraints_v3', 'fundpilot_prefs', 'fundpilot_ds'];
@@ -158,7 +170,7 @@ export function ResearchProvider({ session, children }: { session: Session; chil
 
   const acceptReport = useCallback(
     (raw: Report, stale = false) => {
-      const next = sectorResearch.normalizeReport({ ...raw, report_stale: stale || raw?.report_stale === true });
+      const next = withChanges(raw, { ...raw, report_stale: stale || raw?.report_stale === true });
       if (!next) return false;
       live.current.viewingHistory = false;
       setViewingHistory(false);
@@ -195,7 +207,7 @@ export function ResearchProvider({ session, children }: { session: Session; chil
       const message = (error as Error).name === 'TimeoutError' ? '请求超时，将自动重试。' : (error as Error).message;
       setState(previous => ({ ...previous, connection_error: true, connection_message: message }));
       if (current.report && !current.viewingHistory) {
-        showReport(sectorResearch.normalizeReport({ ...current.report, report_stale: true }));
+        showReport(withChanges(current.report, { ...current.report, report_stale: true }));
         setNotice('当前为上次成功报告，最新行情状态尚未确认。');
       }
     } finally {
@@ -263,7 +275,7 @@ export function ResearchProvider({ session, children }: { session: Session; chil
       const raw = entry.cloud_record
         ? (await request<{ report: Report }>('/api/me/history/report?as_of=' + encodeURIComponent(entry.as_of))).report
         : entry;
-      const next = sectorResearch.normalizeReport({ ...raw, report_stale: true });
+      const next = withChanges(raw, { ...raw, report_stale: true });
       if (!next) throw new Error('历史记录格式无效');
       live.current.viewingHistory = true;
       setViewingHistory(true);
