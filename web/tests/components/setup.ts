@@ -23,11 +23,16 @@ window.ResizeObserver = class {
   disconnect() {}
 };
 window.scrollTo = () => {};
+// Base UI's Switch and other pressables dispatch PointerEvent, which jsdom lacks.
+if (!('PointerEvent' in window)) {
+  (window as unknown as { PointerEvent: typeof MouseEvent }).PointerEvent = class extends MouseEvent {} as typeof MouseEvent;
+}
 Element.prototype.scrollIntoView = () => {};
 
 // Charts draw with ECharts, which needs real layout; the tests check text instead.
 vi.mock('@/components/charts', () => ({
   DatedLine: ({ label }: { label: string }) => label,
+  DatedLines: ({ label }: { label: string }) => label,
   cssColor: () => '',
 }));
 

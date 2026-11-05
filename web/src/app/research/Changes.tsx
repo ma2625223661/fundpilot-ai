@@ -1,14 +1,17 @@
 // Day-over-day changes from the backend (report.sector_changes): a one-line
 // summary for cards, and the "变动提醒" bell in the header. Deltas are read,
 // never computed; signs always accompany colours (red up, green down).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
 import { sectorHref } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { hasChange, type SectorChange, type SectorChanges } from '@/lib/changes';
+import { changeSignature, notifyPermission, notifySupport, readEnabled, readSent, writeEnabled, writeSent } from '@/lib/notify';
 import { DIRECTION_CLASS, direction, num } from '@/lib/format';
 import type { Sector } from '@/lib/report';
 import { cn } from '@/lib/utils';
@@ -78,22 +81,99 @@ function readSeen() {
   }
 }
 
+/** Plain-text summary for a system notification, same wording as ChangeParts. */
+function changeText(change: SectorChange) {
+  const parts: string[] = [];
+  if (change.scoreDelta !== null) parts.push('研究分 ' + (change.scoreDelta > 0 ? '+' : '') + num(change.scoreDelta));
+  if (change.tier) parts.push(`档位由${change.tier.before}变为${change.tier.now}`);
+  parts.push(...change.flags);
+  if (change.risk) parts.push(`风险由${change.risk.before}变为${change.risk.now}`);
+  return parts.join('，');
+}
+
+/** The opt-in switch for system notifications, with the reason when they cannot work. */
+function NotifySetting({ enabled, onChange }: { enabled: boolean; onChange: (on: boolean) => void }) {
+  const support = notifySupport();
+  const [permission, setPermission] = useState(notifyPermission);
+  const on = enabled && permission === 'granted';
+  const hint =
+    support === 'unsupported'
+      ? '当前浏览器不支持系统通知。iPhone 需先"添加到主屏幕"，再从主屏图标打开网站。'
+      : support === 'insecure'
+        ? '系统通知需要 HTTPS，或在运行网站的这台电脑上打开；通过局域网 http 地址访问时无法使用。'
+        : permission === 'denied'
+          ? '浏览器已拒绝本网站发送通知。请在浏览器的网站设置里允许通知，再回来开启。'
+          : '网页开着但不在前台时，若关注的板块出现明显变动，会弹出系统通知；同一变动每天只提醒一次。关闭网页后不会提醒。';
+  return (
+    <div className="flex items-start gap-3 border-t border-border pt-3">
+      <Switch
+        id="change-notify"
+        checked={on}
+        disabled={support !== 'ok' || permission === 'denied'}
+        onCheckedChange={async checked => {
+          if (!checked) return onChange(false);
+          const result = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+          setPermission(result);
+          onChange(result === 'granted');
+        }}
+      />
+      <div className="flex flex-col gap-0.5">
+        <Label htmlFor="change-notify">后台时发系统通知</Label>
+        <p className="text-xs text-muted-foreground text-pretty">{hint}</p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Header bell: notable changes of followed sectors (account edition), or of all
  * sectors when there is no watchlist. The dot marks a report not yet looked at.
+ * With notifications switched on, changes that arrive while the page is in the
+ * background also become one system notification per report.
  */
 export function ChangesBell() {
   const { report } = useResearch();
   const watch = useWatchlist();
   const [seen, setSeen] = useState(readSeen);
+  const [notify, setNotify] = useState(readEnabled);
   const block = report?.sector_changes as SectorChanges | undefined;
-  if (!report || !block) return null;
   const scope = watch.available ? new Set(watch.items) : null;
-  const sectors = new Map<string, Sector>(report.sector_analysis.map((s: Sector) => [s.id, s]));
-  const rows = Object.entries(block.items)
+  const sectors = new Map<string, Sector>((report?.sector_analysis ?? []).map((s: Sector) => [s.id, s]));
+  const rows = Object.entries(block?.items ?? {})
     .filter(([id, change]) => change.notable && sectors.has(id) && (!scope || scope.has(id)))
     .sort(([, a], [, b]) => Math.abs(b.scoreDelta ?? 0) - Math.abs(a.scoreDelta ?? 0));
-  const stamp = String(report.as_of || '');
+  const stamp = String(report?.as_of || '');
+  const signatures = rows.map(([id, change]) => changeSignature(id, change)).join('\n');
+
+  // A side effect on each new report: show changes not notified yet today.
+  useEffect(() => {
+    const day = block?.baselineDate;
+    if (!notify || !day || block?.status !== 'ok' || !rows.length || notifyPermission() !== 'granted') return;
+    const sent = readSent(day);
+    const fresh = rows.filter(([id, change]) => !sent.has(changeSignature(id, change)));
+    if (!fresh.length) return;
+    fresh.forEach(([id, change]) => sent.add(changeSignature(id, change)));
+    writeSent(day, sent);
+    // In front, the bell already shows them; they count as delivered.
+    if (!document.hidden) return;
+    const lines = fresh.slice(0, 3).map(([id, change]) => `${sectors.get(id)?.title ?? id}：${changeText(change)}`);
+    if (fresh.length > 3) lines.push(`等 ${fresh.length} 个板块`);
+    lines.push('变动不代表收益方向，不构成投资建议。');
+    try {
+      const shown = new Notification('FundPilot 变动提醒', { body: lines.join('\n'), tag: 'fundpilot-changes', icon: '/icon-192.png' });
+      shown.onclick = () => {
+        window.focus();
+        location.hash = sectorHref(fresh[0][0]);
+        shown.close();
+      };
+    } catch {
+      // Some browsers only allow notifications from a service worker; the bell still works.
+    }
+    // rows, sectors and block follow from the report and scope captured by these keys.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stamp, notify, signatures]);
+
+  if (!report || !block) return null;
   const unread = rows.length > 0 && seen !== stamp;
   const markSeen = () => {
     setSeen(stamp);
@@ -102,6 +182,10 @@ export function ChangesBell() {
     } catch {
       // Storage unavailable: the dot returns on the next visit.
     }
+  };
+  const chooseNotify = (on: boolean) => {
+    setNotify(on);
+    writeEnabled(on);
   };
   return (
     <Popover onOpenChange={open => open && markSeen()}>
@@ -142,6 +226,7 @@ export function ChangesBell() {
             ))}
           </ul>
         )}
+        <NotifySetting enabled={notify} onChange={chooseNotify} />
       </PopoverContent>
     </Popover>
   );
