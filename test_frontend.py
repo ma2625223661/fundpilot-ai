@@ -66,6 +66,15 @@ class ResolveFrontendTests(unittest.TestCase):
         self.assertNotIn('index-AAA.js', frontend.public)
         self.assertIn('index-AAA.js', frontend.assets)
 
+    def test_home_screen_manifest_and_icons_are_public_assets(self):
+        folder = build_react(self.root)
+        for name in ('manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.svg'):
+            (folder / name).write_text('x', encoding='utf-8')
+        frontend = resolve_frontend(self.root, {'FUNDPILOT_FRONTEND': 'react'})
+        for name in ('manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.svg'):
+            self.assertIn(name, frontend.assets)
+            self.assertIn(name, frontend.public)
+
     def test_manifest_without_a_login_entry_is_rejected(self):
         build_react(self.root, {'index.html': MANIFEST['index.html']})
         with self.assertRaisesRegex(RuntimeError, 'login.html'):

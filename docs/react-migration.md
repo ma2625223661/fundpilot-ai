@@ -324,6 +324,24 @@
 - 修复：周期切换起初放在 CardAction 里，手机上会把说明文字挤成一窄列，已改为放在标题行内并允许换行。
 - 新增组件测试 `tests/components/period.test.tsx`：切换到 20 日显示带正负号的值和截止日期；盘中末点标注"盘中"；缺数据显示"—"且不着色。
 
+**C4. 搜索、导出与添加到主屏幕（已完成）**
+- Ctrl+K 搜索面板新增两个分组：
+  - "页面"：5 个主页面；
+  - "设置"：AI 研究设置、数据连接、订阅帮助、手机访问；账号与安全只在账号版显示，用户管理只对管理员显示。设置项沿用旧锚点链接，打开对应的设置分区。
+- 板块总览卡片右上角新增"导出 CSV"（`lib/csv.ts`）：
+  - 导出当前筛选和排序下的行，用表格里显示的文字（正负号、"—"、"待评估"原样保留）；
+  - 第一行写报告时间（历史快照时注明）和"研究分不代表收益概率，不构成投资建议"；
+  - 文件带 UTF-8 BOM，Excel 打开中文不乱码；以 `= + - @` 开头的非数字文本加单引号，防止被表格软件当成公式执行；
+  - 文件名 `fundpilot-板块-YYYYMMDD.csv`。
+- 添加到主屏幕：
+  - 新增 `web/public/manifest.webmanifest`、`favicon.svg`（品牌蓝底白色走势线，纯色）、`icon-192.png`、`icon-512.png`、`apple-touch-icon.png`；
+  - PNG 由 `web/scripts/make-icons.mjs`（开发依赖 `@resvg/resvg-js`）从 SVG 生成并提交，日常构建不需要这个脚本；
+  - 三个 HTML 入口加了 icon、apple-touch-icon、manifest 和 theme-color；
+  - 不加 Service Worker，避免缓存旧报告。
+- 后端 `research_frontend.py`：静态白名单增加 `.webmanifest`，manifest 和图标加入 `PUBLIC_EXTRAS`（浏览器请求 manifest 时不带登录状态）。实测未登录访问这些文件返回 200，类型分别为 `application/manifest+json`、`image/png`、`image/svg+xml`；`index.html` 仍跳转登录页。`test_frontend.py` 补了用例。
+- 新增组件测试 `tests/components/export-search.test.tsx`：CSV 转义与公式防护；导出内容（BOM、提示行、表头、行数、带正负号的涨跌）；搜索面板列出页面和设置。
+- 实测：浏览器面板隐藏时，搜索面板打开后输入框不会自动获得焦点，原因与之前抽屉焦点相同（后台页面不触发动画帧）；手动聚焦后，输入"数据"出现"数据依据 / 模型与数据设置 / 数据连接"，回车跳到 `#data`。
+
 ## 必须遵守的约束
 
 - 后端 CSP 是 `script-src 'self'`：不得使用 CDN、外部字体、内联脚本。

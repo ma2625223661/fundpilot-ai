@@ -11,13 +11,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 LEGACY, REACT = 'legacy', 'react'
-ASSET_SUFFIXES = ('.js', '.css', '.svg', '.png', '.ico')
+ASSET_SUFFIXES = ('.js', '.css', '.svg', '.png', '.ico', '.webmanifest')
 LEGACY_PUBLIC = frozenset({'login.html', 'login.js', 'login.css', 'phone-verification.js',
                            'ai-service.html', 'ai-service.css', 'qq-support.png'})
 # Pages a visitor can open before logging in; each one's scripts and styles come along.
 PUBLIC_ENTRIES = ('login.html', 'ai-service.html')
-# Files copied verbatim from web/public/ (not listed in the manifest).
-PUBLIC_EXTRAS = ('qq-support.png', 'favicon.svg')
+# Files copied verbatim from web/public/ (not listed in the manifest). The web app
+# manifest and its icons must be public: browsers fetch the manifest without cookies.
+PUBLIC_EXTRAS = ('qq-support.png', 'favicon.svg', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+                 'apple-touch-icon.png')
 
 
 @dataclass(frozen=True)

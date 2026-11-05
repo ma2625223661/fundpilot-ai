@@ -1,7 +1,7 @@
 // Port of renderBoards: category filter, search, sort, scarcity filter and the
 // grouped sector list. Grouping, ordering and colours come from the old logic.
 import { Fragment, useState } from 'react';
-import { ArrowDown, ArrowUpDown, Diamond, Info, Search, SearchX } from 'lucide-react';
+import { ArrowDown, ArrowUpDown, Diamond, Download, Info, Search, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
@@ -14,9 +14,10 @@ import { IndicatorIcon } from '@/components/research/common';
 import { ScarcityBadge } from '@/app/research/Scarcity';
 import { useResearch } from '@/app/research/ResearchContext';
 import { sectorResearch, sectorScarcity } from '@/lib/research';
-import { DIRECTION_CLASS, GROUP_LABELS, direction, finite, num, pct, txt } from '@/lib/format';
+import { DIRECTION_CLASS, GROUP_LABELS, direction, finite, num, pct, stamp, txt } from '@/lib/format';
 import { TONE_BADGE, TONE_BORDER, TONE_TEXT, sectorEvents, sectorTone, type Report, type Sector } from '@/lib/report';
 import { cn } from '@/lib/utils';
+import { downloadCsv, toCsv } from '@/lib/csv';
 
 type SortMode = 'score' | 'change' | 'name';
 const SORT_LABELS: Record<SortMode, string> = { score: '同类研究分优先', change: '当日涨幅优先', name: '板块名称' };
@@ -408,6 +409,43 @@ export function useBoardView(report: Report | null, selected: string | null) {
 
 export type BoardView = ReturnType<typeof useBoardView>;
 
+/**
+ * The listed rows (current filter and order) as a spreadsheet, using the same
+ * texts as the table. The first line carries the report time and the score note.
+ */
+function exportSectors(report: Report, sectors: Sector[]) {
+  const historical = report.report_stale === true;
+  const part = (value: unknown, signed = false) => (finite(value) ? (signed && value > 0 ? '+' : '') + num(value) : '待评估');
+  const rows: unknown[][] = [
+    [`报告时间 ${stamp(report.as_of)}${historical ? '（历史快照）' : ''}；研究分不代表收益概率，不构成投资建议。`],
+    ['板块', '分类', '涨跌幅', '研究分', '分制', '档位', '基本面 / 40', '走势 / 30', '事件 ±30', '领涨样本', '行情风险', '环境风险 / 100', '行情时间'],
+  ];
+  for (const sector of sectors) {
+    const data = sectorResearch.sectorDataPresentation(sector, { historical });
+    const view = sectorResearch.companyScoreView(sector);
+    const parts = sector.score_breakdown || {};
+    const lead = leadSample(report, sector);
+    const risk = sector.market_risk || {};
+    rows.push([
+      sector.title,
+      GROUP_LABELS[sector.group] || sector.group,
+      data.changeText,
+      data.scoreText,
+      data.scoreUnit,
+      view?.label ?? '',
+      view ? part(parts.fundamentals?.points) : '—',
+      view ? part(parts.trend?.points) : '—',
+      view ? part(parts.catalysts?.observed_adjustment, true) : '—',
+      lead ? `${lead.name} ${pct(lead.change)}` : '—',
+      data.riskText,
+      finite(risk.score) ? num(risk.score, 0) : '—',
+      stamp(sector.as_of),
+    ]);
+  }
+  const day = String(report.as_of || '').slice(0, 10).replace(/-/g, '') || 'report';
+  downloadCsv(`fundpilot-板块-${day}.csv`, toCsv(rows));
+}
+
 export function BoardExplorer({ board, onOpenDetail }: { board: BoardView; onOpenDetail: () => void }) {
   const { report, select } = useResearch();
   if (!report) return null;
@@ -438,7 +476,13 @@ export function BoardExplorer({ board, onOpenDetail }: { board: BoardView; onOpe
           <h2 className="text-lg font-semibold text-balance">板块机会总览</h2>
         </CardTitle>
         <CardAction>
-          <ScoreGuide report={report} sort={sort} families={families} scarcity={scarcityAllowed} />
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" size="sm" disabled={!visible.length} onClick={() => exportSectors(report, visible)}>
+              <Download aria-hidden="true" />
+              导出 CSV
+            </Button>
+            <ScoreGuide report={report} sort={sort} families={families} scarcity={scarcityAllowed} />
+          </div>
         </CardAction>
         <CardDescription className="tabular-nums text-pretty">
           共 {sectors.length} 个方向 · 公司完整分 {company.filter(s => s.score_status === 'complete').length} 个 · 公司基础/阶段分{' '}
