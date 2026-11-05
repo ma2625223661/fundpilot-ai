@@ -20,6 +20,7 @@ const PAGES: Record<ViewId, ComponentType> = {
   history: lazy(() => import('@/app/views/HistoryView').then(module => ({ default: module.HistoryView }))),
   cycle: lazy(() => import('@/app/views/CycleView').then(module => ({ default: module.CycleView }))),
   settings: lazy(() => import('@/app/views/SettingsView').then(module => ({ default: module.SettingsView }))),
+  sector: lazy(() => import('@/app/views/SectorView').then(module => ({ default: module.SectorView }))),
 };
 
 function PageSkeleton() {

@@ -56,7 +56,8 @@ function useSidebarMode() {
 function NavItem({ id, current, badge }: { id: ViewId; current: ViewId; badge?: { text: string; alert?: boolean } }) {
   const { close } = useSidebarMode();
   const view = VIEWS.find(entry => entry.id === id)!;
-  const active = current === id;
+  // A sector page belongs to the research section.
+  const active = current === id || (current === 'sector' && id === 'dash');
   return (
     <SidebarMenuItem>
       <SidebarMenuButton

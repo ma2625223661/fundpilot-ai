@@ -14,7 +14,7 @@ import { IndicatorIcon } from '@/components/research/common';
 import { ScarcityBadge } from '@/app/research/Scarcity';
 import { useResearch } from '@/app/research/ResearchContext';
 import { sectorResearch, sectorScarcity } from '@/lib/research';
-import { DIRECTION_CLASS, GROUP_LABELS, direction, finite, num, txt } from '@/lib/format';
+import { DIRECTION_CLASS, GROUP_LABELS, direction, finite, num, pct, txt } from '@/lib/format';
 import { TONE_BADGE, TONE_BORDER, TONE_TEXT, sectorEvents, sectorTone, type Report, type Sector } from '@/lib/report';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +53,43 @@ function Part({ label, value, max, signed = false }: { label: string; value: num
           className={cn('block h-full rounded-full', signed && measured && value < 0 ? 'bg-fall' : signed ? 'bg-rise' : 'bg-primary')}
           style={{ width: width + '%' }}
         />
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The company sample with the largest change today, and how many samples rose or
+ * fell (as quote centres show a sector's leading stock). Only picks and counts
+ * the quotes the report already holds; nothing is recalculated.
+ */
+function leadSample(report: Report, sector: Sector) {
+  const rows: Sector[] = report.company_evidence.sector_leaders[sector.id] || [];
+  const quoted = rows.filter(row => finite(row.quote?.pct_chg));
+  if (!quoted.length) return null;
+  const top = quoted.reduce((best, row) => (row.quote.pct_chg > best.quote.pct_chg ? row : best));
+  return {
+    name: top.name as string,
+    change: top.quote.pct_chg as number,
+    date: String(top.quote.trade_date || top.as_of || '').slice(5, 10),
+    up: quoted.filter(row => row.quote.pct_chg > 0).length,
+    down: quoted.filter(row => row.quote.pct_chg < 0).length,
+    total: rows.length,
+  };
+}
+
+function LeadSample({ report, sector, className }: { report: Report; sector: Sector; className?: string }) {
+  const lead = leadSample(report, sector);
+  if (!lead) return <span className={cn('text-xs text-muted-foreground', className)}>—</span>;
+  const tone = report.report_stale ? 'unknown' : direction(lead.change);
+  return (
+    <span className={cn('flex flex-col', className)}>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+        <span className="max-w-24 truncate text-sm">{lead.name}</span>
+        <span className={cn('text-sm font-medium tabular-nums', DIRECTION_CLASS[tone])}>{pct(lead.change)}</span>
+      </span>
+      <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+        {lead.up} 涨 · {lead.down} 跌 / {lead.total} 家{lead.date && ' · ' + lead.date}
       </span>
     </span>
   );
@@ -123,6 +160,12 @@ function SectorRow({ sector, report, active, onSelect }: { sector: Sector; repor
           <Part label="事件催化" value={parts.catalysts?.observed_adjustment ?? null} max={30} signed />
         </span>
       )}
+      {leadSample(report, sector) && (
+        <span className="flex items-center gap-2 text-xs font-normal">
+          <span className="text-muted-foreground">领涨样本</span>
+          <LeadSample report={report} sector={sector} className="flex-row items-baseline gap-2" />
+        </span>
+      )}
       {view?.gates && <span className="text-xs font-normal text-muted-foreground">{view.gates}</span>}
     </Button>
   );
@@ -182,6 +225,7 @@ const GUIDE: [string, string][] = [
   ['事件 ±30', '本批官方证据里最强利好与最强利空的调整，重复报道不叠加；"待评估"不按 0 分处理。'],
   ['行情风险、环境风险', '越高越需留意。环境风险按大盘、流动性与宏观独立计算，不扣减研究分。'],
   ['涨跌幅', '样本当日表现，红色为涨、绿色为跌；灰色或"—"表示没有可用行情，不能当作 0。'],
+  ['领涨样本', '本板块公司样本中当日涨幅最大的一家，以及样本里上涨、下跌的家数和行情日期；没有报价的样本不计入涨跌家数。样本不代表全板块。'],
 ];
 
 function SortHead({
@@ -235,6 +279,7 @@ function SectorTable({
           <TableRow>
             <SortHead label="板块" mode="name" sort={sort} setSort={setSort} />
             <SortHead label="涨跌幅" mode="change" sort={sort} setSort={setSort} className="text-right" />
+            <TableHead className="hidden text-xs xl:table-cell">领涨样本</TableHead>
             <SortHead label="研究分" mode="score" sort={sort} setSort={setSort} className="text-right" />
             <TableHead className="text-right text-xs">基本面 / 40</TableHead>
             <TableHead className="text-right text-xs">走势 / 30</TableHead>
@@ -260,7 +305,7 @@ function SectorTable({
             const heading =
               sort === 'score' && family.id !== previous ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={8} className="bg-muted/50 py-1.5">
+                  <TableCell colSpan={9} className="bg-muted/50 py-1.5">
                     <span className="text-xs font-semibold tabular-nums">
                       {family.label} · {counts.get(family.id)} 个
                     </span>
@@ -291,11 +336,14 @@ function SectorTable({
                     >
                       {sector.title}
                     </Button>
-                    <span className="block max-w-xs truncate text-xs text-muted-foreground" title={data.subtitle}>
+                    <span className="block max-w-52 truncate text-xs text-muted-foreground" title={data.subtitle}>
                       {data.subtitle}
                     </span>
                   </TableCell>
                   <TableCell className={cn('text-right font-semibold tabular-nums', DIRECTION_CLASS[changeTone])}>{data.changeText}</TableCell>
+                  <TableCell className="hidden xl:table-cell">
+                    <LeadSample report={report} sector={sector} />
+                  </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     <span className={cn('text-base font-semibold tabular-nums', TONE_TEXT[tone])}>{data.scoreText}</span>
                     {view && <span className={cn('ml-1 rounded-sm px-1 py-0.5 text-xs', TONE_BADGE[tone])}>{view.label}</span>}
@@ -303,7 +351,7 @@ function SectorTable({
                   <TableCell className="text-right tabular-nums">{view ? part(parts.fundamentals?.points) : '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.trend?.points) : '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{view ? part(parts.catalysts?.observed_adjustment, true) : '—'}</TableCell>
-                  <TableCell className="text-xs whitespace-nowrap">
+                  <TableCell className="text-xs">
                     <span className="relative z-10 flex items-center gap-1">
                       {indicator && <IndicatorIcon indicator={indicator} />}
                       {data.riskText}

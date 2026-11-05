@@ -1,8 +1,8 @@
 // The sector research home page (the old #dash view).
 import { useEffect, useState } from 'react';
-import { CircleAlert, CircleCheck, History, LoaderCircle, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
+import { CircleAlert, CircleCheck, History, LoaderCircle, Maximize2, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -18,6 +18,7 @@ import { SectorHeatmap } from '@/app/research/SectorHeatmap';
 import { useResearch } from '@/app/research/ResearchContext';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
+import { sectorHref } from '@/app/navigation';
 import { SubscriptionProfile } from '@/app/research/SubscriptionProfile';
 import { Watchlist } from '@/app/research/Watchlist';
 import type { Sector } from '@/lib/report';
@@ -239,8 +240,18 @@ export function DashView() {
       {report && (
         <Sheet open={detailOpen && Boolean(detailSector)} onOpenChange={setDetailOpen}>
           <SheetContent side="right" size="wide" className="gap-0 p-0">
-            <SheetHeader className="border-b border-border pr-12">
+            <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border pr-12">
               <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
+              {board.current && (
+                <a
+                  href={sectorHref(board.current)}
+                  onClick={() => setDetailOpen(false)}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-muted-foreground')}
+                >
+                  <Maximize2 aria-hidden="true" />
+                  在独立页面打开
+                </a>
+              )}
               <SheetDescription className="sr-only">{(detailSector?.title ?? '') + '：研究依据、数据缺口与公司证据'}</SheetDescription>
             </SheetHeader>
             <ScrollArea key={board.current} className="min-h-0 flex-1">
