@@ -274,14 +274,24 @@
 - 侧边栏"我的关注"：每行加一条近 20 日的迷你线。
 - 新增 `tests/components/sparkline.test.tsx`：断点处断开、数据不足时不画、无标签时对读屏隐藏、`sectorTrend` 的取数与末点规则。
 
-**未做：四大指数卡片的走势线需要后端提供数据**
-- 公开报告里没有四大指数的历史数据。`_quote_histories` 只有作为板块参考的 `tencent:sh000300`，并且在 `status()` 中被剔除。
-- 建议的后端改动（待确认后再做）：
-  - 在 `research_sectors.py` 中复用现有的 `_history_url()`（腾讯 fqkline 日线，121 日），加上 `parse_sector_history`，抓取 `sh000001`、`sz399001`、`sh000300`、`sz399006`；
-  - 把最近 60 个收盘点以 `history: [{date, close}]` 附在 `snapshot.market` 的对应行上（约 4 × 60 个点，体积很小）；
-  - 抓取失败时不带该字段，前端不画线；
-  - 补 `test_research_overview.py` 的用例。
-- 盘中分时线需要新的分钟级数据接口，并接入每 5 分钟的刷新流程，改动和请求量都更大，建议放在日线之后再考虑。
+**四大指数卡片走势线（已完成，含后端改动）**
+- 后端 `research_sectors.py`：
+  - 新增 `index_history_requests()`：把四大指数 `sh000001`、`sz399001`、`sh000300`、`sz399006` 以 `market:<代码>` 为键并入 `collect_sector_histories()`。复用现有的腾讯 fqkline 日线、`parse_tencent_history()`、30 秒预算和"收盘后才计入"的截止规则。沪深300 与板块参考共用同一请求，不会重复抓取。
+  - 新增 `attach_index_histories()`：把最近 60 个收盘点以 `history: [{date, close}]` 附在 `snapshot.market` 对应行上。取不到或少于 2 点时不带该字段。
+  - `market_overview.indices` 去掉 `history`，避免重复。
+  - AI 提示词只挑选指数的指定字段，不包含历史，不增加 Token。
+  - 这 4 条日线也写入内部 `_quote_histories`，所以每 5 分钟的行情刷新会复用缓存，不重复请求。
+  - 数据来源记录为 `sector_history:tencent:<代码>`，显示在"数据依据"里。
+- 后端测试：`test_research_sectors.py` 新增 `IndexHistoryTests`，覆盖三点：
+  - 只请求四大 A 股指数；
+  - 只附最近 60 点的日期和收盘价；
+  - 数据缺失或过短时不带该字段。
+- 前端：
+  - `lib/report.ts` 新增 `indexTrend()`：坏的收盘价断开显示，坏日期丢弃，不足 2 点时不画。
+  - 指数卡片在点位下面画走势线，并写"日线 60 日 · 截至 日期"；读屏说明含起止日期。
+  - 新增 2 个组件测试。
+- 实测（测试服务器，2026-11-05）：一轮研究后，四个指数都取得 120～121 个日线点，前端显示 2026-08-05 至 2026-11-04 共 60 点；截止到上一个已收盘交易日，当天盘中不计入。11:00 的 5 分钟行情刷新生成新报告后，四条日线仍在（复用缓存）。
+- 全量后端测试有 11 项失败，集中在 `test_sector_member_additions.py`、`test_research_public_data.py`、`test_research_theme_memberships.py` 的成分股归属用例。撤掉本次改动后同样失败，与本次无关，尚未处理。
 
 ## 必须遵守的约束
 

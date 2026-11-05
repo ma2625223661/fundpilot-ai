@@ -87,3 +87,19 @@ export function sectorTrend(sector: Sector, days = 60) {
   if (points.length < 2) return null;
   return { points, from: points[0].date, to: points[points.length - 1].date, intraday: Boolean(live) };
 }
+
+/**
+ * Daily closes the backend attaches to a market index row (snapshot.market[].history).
+ * Malformed points become gaps; fewer than two valid closes means no line.
+ */
+export function indexTrend(row: Record<string, unknown>) {
+  const raw = Array.isArray(row.history) ? (row.history as Record<string, unknown>[]) : [];
+  const points = raw
+    .filter(point => point && typeof point.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(point.date))
+    .map(point => ({
+      date: point.date as string,
+      value: typeof point.close === 'number' && Number.isFinite(point.close) && point.close > 0 ? point.close : null,
+    }));
+  if (points.filter(point => point.value !== null).length < 2) return null;
+  return { points, from: points[0].date, to: points[points.length - 1].date };
+}

@@ -468,6 +468,30 @@ def parse_tencent_history(data, symbol, as_of):
     return ordered
 
 
+# The four market index cards get their recent daily closes for a small trend
+# line. Same provider and parser as the direct index quotes (Tencent day line).
+INDEX_HISTORY_CODES = ('sh000001', 'sz399001', 'sh000300', 'sz399006')
+INDEX_HISTORY_DAYS = 60
+
+
+def index_history_requests(snapshot):
+    """History requests for the market index rows, keyed apart from sector ids."""
+    return {'market:' + row['code']: {**row, 'history_secid': 'tencent:' + row['code']}
+            for row in snapshot.get('market', []) if row.get('code') in INDEX_HISTORY_CODES}
+
+
+def attach_index_histories(snapshot, histories):
+    """Put the last closes on each index row; leave the field out when none were fetched."""
+    for row in snapshot.get('market', []):
+        rows = histories.get('tencent:' + str(row.get('code', ''))) or []
+        points = [{'date': r['date'], 'close': r['close']} for r in rows[-INDEX_HISTORY_DAYS:]
+                  if r.get('date') and isinstance(r.get('close'), (int, float))]
+        if len(points) >= 2:
+            row['history'] = points
+        else:
+            row.pop('history', None)
+
+
 def collect_sector_histories(matches, as_of, progress=None, cached=None):
     wanted = {quote['history_secid']: quote for quote in matches.values()
               if quote.get('history_secid') and _quote_fresh(quote, as_of)}
@@ -929,11 +953,13 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
     snapshot['sources'].extend(sources + [index_source, macro_source] + reference_sources)
     matches = match_sector_quotes(catalog, quotes, indices, reference_quotes)
     histories, history_sources = collect_sector_histories(
-        {key: quote for key, quote in matches.items()
-         if not str(quote.get('history_secid', '')).startswith('official:')}, as_of, update,
+        {**{key: quote for key, quote in matches.items()
+            if not str(quote.get('history_secid', '')).startswith('official:')},
+         **index_history_requests(snapshot)}, as_of, update,
         cached=prior_public.get('_quote_histories') if quote_only else None)
     histories.update(reference_histories)
     snapshot['sources'].extend(history_sources)
+    attach_index_histories(snapshot, histories)
     # Replace the complete reference pair when a primary quote exists but its
     # own recent history is unavailable. Never splice two providers' levels.
     for quote in reference_quotes:
@@ -1161,7 +1187,9 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
     coverage['fully_ready_sector_count'] = sum(all(r['status'] == 'ok' for r in row['requirements']) for row in sectors)
     coverage['custom_indicator_count'] = len(custom)
     coverage['custom_scored_count'] = sum(row.get('score_model') == 'company_research_v2' and row.get('recommendation_index') is not None for row in sectors)
-    indices_overview = [{**row, 'value': row.get('last'), 'status': 'ok' if _quote_fresh(row, as_of) else 'stale'}
+    # The daily closes stay on snapshot.market only; the overview does not repeat them.
+    indices_overview = [{**{k: v for k, v in row.items() if k != 'history'}, 'value': row.get('last'),
+                         'status': 'ok' if _quote_fresh(row, as_of) else 'stale'}
                         for row in snapshot.get('market', [])]
     strategy = {'schema_version': 1, 'panic': panic, 'regime': regime, 'macro_evidence': macro_evidence,
                 'summary': panic['summary'], 'minimum_holding_days': 7,

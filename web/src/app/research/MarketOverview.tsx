@@ -10,7 +10,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Change, SourceLink } from '@/components/research/common';
 import { sectorResearch } from '@/lib/research';
 import { arr, finite, num, stamp, txt } from '@/lib/format';
-import type { Report, Sector, Source } from '@/lib/report';
+import { indexTrend, type Report, type Sector, type Source } from '@/lib/report';
+import { Sparkline } from '@/components/sparkline';
 import { cn } from '@/lib/utils';
 
 type Tone = 'good' | 'neutral' | 'caution' | 'alert' | 'unknown';
@@ -328,18 +329,34 @@ export function MarketQuotes({ report }: { report: Report }) {
   if (!quotes.length) return null;
   return (
     <section aria-label="市场指数行情" className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {quotes.map((q, index) => (
-        <Card key={index} size="sm">
-          <CardContent className="flex flex-col gap-1">
-            <span className="text-sm text-muted-foreground">{txt(q.name || q.title || q.label, '市场指数')}</span>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-              <span className="text-xl font-semibold tabular-nums">{num(q.price ?? q.last ?? q.value)}</span>
-              <Change value={q.change_pct} historical={report.report_stale} className="text-sm font-semibold" />
-            </div>
-            <span className="text-xs text-muted-foreground tabular-nums">{stamp(q.as_of || q.data_time || q.timestamp)}</span>
-          </CardContent>
-        </Card>
-      ))}
+      {quotes.map((q, index) => {
+        const name = txt(q.name || q.title || q.label, '市场指数');
+        const trend = indexTrend(q);
+        return (
+          <Card key={index} size="sm">
+            <CardContent className="flex flex-col gap-1">
+              <span className="text-sm text-muted-foreground">{name}</span>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <span className="text-xl font-semibold tabular-nums">{num(q.price ?? q.last ?? q.value)}</span>
+                <Change value={q.change_pct} historical={report.report_stale} className="text-sm font-semibold" />
+              </div>
+              {trend && (
+                <Sparkline
+                  points={trend.points}
+                  className="h-7"
+                  label={`${name}近 ${trend.points.length} 个交易日收盘走势，${trend.from} 至 ${trend.to}`}
+                />
+              )}
+              <span className="text-xs text-muted-foreground tabular-nums">{stamp(q.as_of || q.data_time || q.timestamp)}</span>
+              {trend && (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  日线 {trend.points.length} 日 · 截至 {trend.to}
+                </span>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </section>
   );
 }

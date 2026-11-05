@@ -258,6 +258,38 @@ class SectorResearchTests(unittest.TestCase):
                 self.assertIsNone(row['quote'])
 
 
+class IndexHistoryTests(unittest.TestCase):
+    """Daily closes for the four market index cards (small trend lines)."""
+
+    def market(self):
+        return {'market': [
+            {'code': 'sh000001', 'name': '上证指数', 'last': 3900, 'as_of': '2026-11-04T15:00:00+08:00'},
+            {'code': 'sz399006', 'name': '创业板指', 'last': 2500, 'as_of': '2026-11-04T15:00:00+08:00'},
+            {'code': 'hkHSI', 'name': '恒生指数', 'last': 26000, 'as_of': '2026-11-04T16:00:00+08:00'}]}
+
+    def test_requests_cover_only_the_four_a_share_indices_on_the_tencent_day_line(self):
+        requests = sectors.index_history_requests(self.market())
+        self.assertEqual(sorted(requests), ['market:sh000001', 'market:sz399006'])
+        self.assertEqual(requests['market:sh000001']['history_secid'], 'tencent:sh000001')
+        self.assertEqual(requests['market:sh000001']['name'], '上证指数')
+
+    def test_last_sixty_closes_are_attached_with_dates_only(self):
+        snapshot = self.market()
+        rows = [{'date': f'2026-{8 + i // 28:02d}-{i % 28 + 1:02d}', 'close': 3000 + i, 'return_pct': 0.1}
+                for i in range(80)]
+        sectors.attach_index_histories(snapshot, {'tencent:sh000001': rows})
+        history = snapshot['market'][0]['history']
+        self.assertEqual(len(history), sectors.INDEX_HISTORY_DAYS)
+        self.assertEqual(history[-1], {'date': rows[-1]['date'], 'close': rows[-1]['close']})
+        self.assertNotIn('history', snapshot['market'][1])
+
+    def test_missing_or_too_short_history_leaves_the_field_out(self):
+        snapshot = self.market()
+        snapshot['market'][0]['history'] = [{'date': '2026-10-01', 'close': 1}]
+        sectors.attach_index_histories(snapshot, {'tencent:sh000001': [{'date': '2026-11-04', 'close': 3900}]})
+        self.assertNotIn('history', snapshot['market'][0])
+
+
 if __name__ == '__main__':
     unittest.main()
 

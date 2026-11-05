@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { Sparkline } from '@/components/sparkline';
-import { sectorTrend } from '@/lib/report';
+import { indexTrend, sectorTrend } from '@/lib/report';
+import { MarketQuotes } from '@/app/research/MarketOverview';
 
 describe('Sparkline', () => {
   it('breaks the line at a missing point instead of drawing it at zero', () => {
@@ -47,5 +48,34 @@ describe('sectorTrend', () => {
   it('returns nothing for a sector without its own sample index', () => {
     expect(sectorTrend({ custom_index: null })).toBeNull();
     expect(sectorTrend({})).toBeNull();
+  });
+});
+
+describe('index card trend', () => {
+  const row = {
+    code: 'sh000001',
+    name: '上证指数',
+    last: 3900,
+    change_pct: 0.5,
+    as_of: '2026-11-04T15:00:00+08:00',
+    history: [
+      { date: '2026-11-02', close: 3850 },
+      { date: '2026-11-03', close: 'bad' },
+      { date: 'not-a-date', close: 1 },
+      { date: '2026-11-04', close: 3900 },
+    ],
+  };
+
+  it('reads the daily closes, turning a bad close into a gap and dropping bad dates', () => {
+    const trend = indexTrend(row)!;
+    expect(trend.points.map(point => point.value)).toEqual([3850, null, 3900]);
+    expect(trend.to).toBe('2026-11-04');
+    expect(indexTrend({ ...row, history: undefined })).toBeNull();
+  });
+
+  it('draws the line on the card with its end date', () => {
+    const { container } = render(<MarketQuotes report={{ report_stale: false, snapshot: { market: [row] } }} />);
+    expect(container.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toContain('2026-11-02 至 2026-11-04');
+    expect(container.textContent).toContain('截至 2026-11-04');
   });
 });
