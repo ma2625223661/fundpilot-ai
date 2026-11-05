@@ -4,7 +4,8 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sectorResearch } from '@/lib/research';
-import { DIRECTION_CLASS, direction, finite, pct } from '@/lib/format';
+import { DIRECTION_CLASS, direction, finite } from '@/lib/format';
+import { periodChange, periodInfo, sortByPeriod, type Period } from '@/app/research/period';
 import { TONE_TEXT, sectorTone, type Report, type Sector } from '@/lib/report';
 import { cn } from '@/lib/utils';
 
@@ -53,33 +54,40 @@ function RankList({
   );
 }
 
-export function SectorRankings({ report, onOpen }: { report: Report; onOpen: (id: string) => void }) {
+export function SectorRankings({ report, period, onOpen }: { report: Report; period: Period; onOpen: (id: string) => void }) {
   const historical = report.report_stale;
   const sectors: Sector[] = report.sector_analysis;
-  const quoted = sectors.filter(s => sectorResearch.sectorDataPresentation(s, { historical }).hasQuote && finite(s.change_pct));
-  const byChange: Sector[] = sectorResearch.sortSectors(quoted, 'change');
-  const gainers = byChange.filter(s => s.change_pct > 0).slice(0, 6);
-  const decliners = [...byChange].reverse().filter(s => s.change_pct < 0).slice(0, 6);
+  const info = periodInfo(period);
+  const ordered = sortByPeriod(
+    sectors.filter(s => periodChange(s, report, period).value !== null),
+    report,
+    period,
+  );
+  const value = (s: Sector) => periodChange(s, report, period).value as number;
+  const gainers = ordered.filter(s => value(s) > 0).slice(0, 6);
+  const decliners = [...ordered].reverse().filter(s => value(s) < 0).slice(0, 6);
   const scored: Sector[] = sectorResearch.sortSectors(
     sectors.filter(s => finite(s.score)),
     'score',
   ).slice(0, 6);
-  const change = (sector: Sector) => (
-    <span className={historical ? 'text-muted-foreground' : DIRECTION_CLASS[direction(sector.change_pct)]}>{pct(sector.change_pct)}</span>
-  );
+  const change = (sector: Sector) => {
+    const item = periodChange(sector, report, period);
+    return <span className={item.coloured ? DIRECTION_CLASS[direction(item.value)] : 'text-muted-foreground'}>{item.text}</span>;
+  };
+  const note = historical ? '历史涨跌' : period === 'day' ? '当日涨跌' : info.phrase + '涨跌';
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">板块排行</h2>
           <span className="text-xs font-normal text-muted-foreground">
-            {historical ? '历史快照，仅供复盘' : '按本份报告的行情与研究分排列'} · 点击名称查看依据
+            {historical ? '历史快照，仅供复盘' : '涨跌周期与热力图一致'} · 点击名称查看依据
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-3">
-        <RankList title="涨幅榜" note={historical ? '历史涨跌' : '当日涨跌'} rows={gainers} value={change} onOpen={onOpen} />
-        <RankList title="跌幅榜" note={historical ? '历史涨跌' : '当日涨跌'} rows={decliners} value={change} onOpen={onOpen} />
+        <RankList title="涨幅榜" note={note} rows={gainers} value={change} onOpen={onOpen} />
+        <RankList title="跌幅榜" note={note} rows={decliners} value={change} onOpen={onOpen} />
         <RankList
           title="研究分榜"
           note="同口径优先，不代表收益概率"

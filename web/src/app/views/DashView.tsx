@@ -14,6 +14,7 @@ import { ImportantEvents } from '@/app/research/Events';
 import { MarketOverview, MarketQuotes } from '@/app/research/MarketOverview';
 import { SectorRankings } from '@/app/research/SectorRankings';
 import { SectorHeatmap } from '@/app/research/SectorHeatmap';
+import { usePeriod } from '@/app/research/period';
 import { useResearch } from '@/app/research/ResearchContext';
 import { researchStatus } from '@/app/research/research-status';
 import { SectorDetail } from '@/app/research/SectorDetail';
@@ -146,6 +147,7 @@ export function DashView() {
 
   const canRefresh = !research.accountMode || session.isAdmin;
   const [tab, setTab] = useState(readTab);
+  const [period, setPeriod] = usePeriod();
   const chooseTab = (value: string) => {
     setTab(value);
     try {
@@ -206,9 +208,9 @@ export function DashView() {
             </div>
           ) : (
             <>
-              <SectorHeatmap report={report} onOpen={openSector} />
+              <SectorHeatmap report={report} period={period} onPeriod={setPeriod} onOpen={openSector} />
               <MarketOverview report={report} />
-              <SectorRankings report={report} onOpen={openSector} />
+              <SectorRankings report={report} period={period} onOpen={openSector} />
             </>
           )}
         </TabsContent>
