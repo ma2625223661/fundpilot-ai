@@ -19,6 +19,7 @@ from research_ai_config import AIConfigStore
 from research_sectors import run_sector_research
 from research_sector_ai import enrich_sector_report
 from research_free_config import FreeDataConfigStore
+from research_frontend import resolve_frontend
 from research_public_config import PublicDataConfigStore
 from research_schedule import default_market_schedule
 
@@ -431,10 +432,12 @@ class Handler(SimpleHTTPRequestHandler):
         return self.reply(404, {'error': '接口不存在'})
 
 
-def create_server(port=8765, *, require_login=True, local_only=False):
+def create_server(port=8765, *, require_login=True, local_only=False, frontend=None):
     # local_only: only this computer can open the site (no phone/LAN access).
+    frontend = frontend or resolve_frontend(ROOT, os.environ)
     server = BoundedThreadingHTTPServer(('127.0.0.1' if local_only else '0.0.0.0', port),
-                                        partial(Handler, directory=str(ROOT / 'dist')))
+                                        partial(Handler, directory=str(frontend.folder)))
+    server.frontend = frontend
     server.local_only = local_only
     addresses = {'127.0.0.1', 'localhost'}
     if not local_only:

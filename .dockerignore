@@ -9,3 +9,8 @@
 !research_*.py
 !dist/
 !dist/**
+# React sources for the build stage; dependencies and output are rebuilt inside.
+!web/
+!web/**
+web/node_modules
+web/dist-react
