@@ -14,3 +14,13 @@ export function DatedLine(props: ComponentProps<typeof LazyDatedLine>) {
     </Suspense>
   );
 }
+
+const LazyDatedLines = lazy(() => import('@/components/charts').then(module => ({ default: module.DatedLines })));
+
+export function DatedLines(props: ComponentProps<typeof LazyDatedLines>) {
+  return (
+    <Suspense fallback={<Skeleton className={cn('h-72 w-full', props.className)} aria-label="正在载入走势图" />}>
+      <LazyDatedLines {...props} />
+    </Suspense>
+  );
+}

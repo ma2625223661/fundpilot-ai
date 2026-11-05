@@ -34,6 +34,8 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { VIEWS, goTo, type ViewId } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
 import { researchStatus } from '@/app/research/research-status';
+import { CompareTray } from '@/app/research/Compare';
+import { useCompareList } from '@/app/research/compare-store';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { sectorResearch } from '@/lib/research';
@@ -59,7 +61,7 @@ function NavItem({ id, current, badge }: { id: ViewId; current: ViewId; badge?: 
   const { close } = useSidebarMode();
   const view = VIEWS.find(entry => entry.id === id)!;
   // A sector page belongs to the research section.
-  const active = current === id || (current === 'sector' && id === 'dash');
+  const active = current === id || ((current === 'sector' || current === 'compare') && id === 'dash');
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -255,11 +257,11 @@ function MobileTabBar({ current }: { current: ViewId }) {
   return (
     <nav
       aria-label="主要页面"
-      className="safe-inset-bottom fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background md:hidden"
+      className="safe-inset-bottom pointer-events-auto border-t border-border bg-background md:hidden"
     >
       <div className="grid grid-cols-5">
         {VIEWS.map(view => {
-          const active = current === view.id || (current === 'sector' && view.id === 'dash');
+          const active = current === view.id || ((current === 'sector' || current === 'compare') && view.id === 'dash');
           return (
             <Button
               key={view.id}
@@ -284,6 +286,7 @@ function MobileTabBar({ current }: { current: ViewId }) {
 
 export function AppShell({ session, view, children }: { session: Session; view: ViewId; children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const tray = useCompareList().length > 0 && view !== 'compare';
   return (
     <SidebarProvider style={{ '--sidebar-width': '17rem' } as CSSProperties}>
       {/* First stop for keyboard users: skip the sidebar and header. A button, not
@@ -317,8 +320,19 @@ export function AppShell({ session, view, children }: { session: Session; view: 
         </header>
         <div id="main-content" tabIndex={-1} className="safe-bottom mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 py-6 outline-none max-md:safe-bottom-tabs">
           {children}
+          {/* Room for the comparison tray, so it never covers the end of the page. */}
+          {tray && <div aria-hidden="true" className="h-24 sm:h-16" />}
         </div>
-        <MobileTabBar current={view} />
+        {/* Fixed bottom dock: the comparison tray above the phone tab bar. Only its
+            children take clicks, so the empty strip never blocks the page. */}
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col">
+          {tray && (
+            <div className="pointer-events-auto px-4">
+              <CompareTray />
+            </div>
+          )}
+          <MobileTabBar current={view} />
+        </div>
       </SidebarInset>
       <SearchPalette open={searchOpen} setOpen={setSearchOpen} />
     </SidebarProvider>

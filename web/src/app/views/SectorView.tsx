@@ -10,6 +10,7 @@ import { goTo, sectorHref, useHashSector } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { SectorDetail } from '@/app/research/SectorDetail';
+import { CompareButton } from '@/app/research/Compare';
 import { sectorResearch } from '@/lib/research';
 import { finite } from '@/lib/format';
 import type { Sector } from '@/lib/report';
@@ -93,6 +94,7 @@ export function SectorView() {
         {back}
         <div className="flex flex-wrap items-center gap-2">
           <WatchButton id={sector.id} />
+          <CompareButton id={sector.id} />
           <Button variant="outline" size="sm" onClick={() => void copyLink()}>
             <Link2 aria-hidden="true" />
             复制链接

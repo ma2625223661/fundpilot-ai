@@ -3,13 +3,13 @@
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
 import { LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent } from 'echarts/components';
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
-echarts.use([LineChart, GridComponent, TooltipComponent, SVGRenderer]);
+echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer]);
 
 export function cssColor(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -89,4 +89,55 @@ export function DatedLine({
     };
   }, [JSON.stringify(points), unit]);
   return <div ref={box} role="img" aria-label={label} className={cn('h-40 w-full', className)} />;
+}
+
+export interface DatedSeries {
+  name: string;
+  points: { date: string; value: number | null }[];
+}
+
+/**
+ * Several dated lines on one date axis (for example sample indices that each
+ * start at 100). Dates missing from a series are gaps, never zero; values are
+ * drawn as given, without rebasing. Colours are --chart-1 … --chart-5.
+ */
+export function DatedLines({ series, unit, label, className }: { series: DatedSeries[]; unit: string; label: string; className?: string }) {
+  const box = useChart(() => {
+    const muted = cssColor('--muted-foreground');
+    const border = cssColor('--border');
+    const dates = [...new Set(series.flatMap(item => item.points.map(point => point.date)))].sort();
+    return {
+      color: [1, 2, 3, 4, 5].map(index => cssColor('--chart-' + index)),
+      grid: { left: 44, right: 12, top: 36, bottom: 24 },
+      legend: { top: 0, textStyle: { color: muted }, itemWidth: 14, itemHeight: 2 },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: cssColor('--popover'),
+        borderColor: border,
+        textStyle: { color: cssColor('--popover-foreground') },
+        valueFormatter: (value: unknown) => (typeof value === 'number' ? value.toFixed(2) + ' ' + unit : '—'),
+      },
+      xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: border } }, axisLabel: { color: muted, hideOverlap: true } },
+      yAxis: {
+        type: 'value',
+        scale: true,
+        name: unit,
+        nameTextStyle: { color: muted },
+        axisLabel: { color: muted },
+        splitLine: { lineStyle: { color: border } },
+      },
+      series: series.map(item => {
+        const byDate = new Map(item.points.map(point => [point.date, point.value]));
+        return {
+          type: 'line',
+          name: item.name,
+          data: dates.map(date => byDate.get(date) ?? null),
+          connectNulls: false,
+          showSymbol: false,
+          lineStyle: { width: 2 },
+        };
+      }),
+    };
+  }, [JSON.stringify(series), unit]);
+  return <div ref={box} role="img" aria-label={label} className={cn('h-72 w-full', className)} />;
 }

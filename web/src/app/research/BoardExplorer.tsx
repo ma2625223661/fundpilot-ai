@@ -64,7 +64,7 @@ function Part({ label, value, max, signed = false }: { label: string; value: num
  * fell (as quote centres show a sector's leading stock). Only picks and counts
  * the quotes the report already holds; nothing is recalculated.
  */
-function leadSample(report: Report, sector: Sector) {
+export function leadSample(report: Report, sector: Sector) {
   const rows: Sector[] = report.company_evidence.sector_leaders[sector.id] || [];
   const quoted = rows.filter(row => finite(row.quote?.pct_chg));
   if (!quoted.length) return null;

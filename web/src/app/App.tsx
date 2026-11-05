@@ -21,6 +21,7 @@ const PAGES: Record<ViewId, ComponentType> = {
   cycle: lazy(() => import('@/app/views/CycleView').then(module => ({ default: module.CycleView }))),
   settings: lazy(() => import('@/app/views/SettingsView').then(module => ({ default: module.SettingsView }))),
   sector: lazy(() => import('@/app/views/SectorView').then(module => ({ default: module.SectorView }))),
+  compare: lazy(() => import('@/app/views/CompareView').then(module => ({ default: module.CompareView }))),
 };
 
 function PageSkeleton() {

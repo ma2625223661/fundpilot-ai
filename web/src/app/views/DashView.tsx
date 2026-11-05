@@ -20,6 +20,7 @@ import { researchStatus } from '@/app/research/research-status';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { sectorHref } from '@/app/navigation';
+import { CompareButton } from '@/app/research/Compare';
 import { SubscriptionProfile } from '@/app/research/SubscriptionProfile';
 import { Watchlist } from '@/app/research/Watchlist';
 import type { Sector } from '@/lib/report';
@@ -236,14 +237,17 @@ export function DashView() {
             <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border pr-12">
               <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
               {board.current && (
-                <a
-                  href={sectorHref(board.current)}
-                  onClick={() => setDetailOpen(false)}
-                  className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-muted-foreground')}
-                >
-                  <Maximize2 aria-hidden="true" />
-                  在独立页面打开
-                </a>
+                <span className="flex items-center gap-1">
+                  <CompareButton id={board.current} />
+                  <a
+                    href={sectorHref(board.current)}
+                    onClick={() => setDetailOpen(false)}
+                    className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-muted-foreground')}
+                  >
+                    <Maximize2 aria-hidden="true" />
+                    在独立页面打开
+                  </a>
+                </span>
               )}
               <SheetDescription className="sr-only">{(detailSector?.title ?? '') + '：研究依据、数据缺口与公司证据'}</SheetDescription>
             </SheetHeader>
