@@ -112,7 +112,7 @@ export function SectorHeatmap({ report, onOpen }: { report: Report; onOpen: (id:
           )}
         </CardTitle>
         <CardDescription className="text-pretty tabular-nums">
-          {historical ? '历史报告，涨跌仅供复盘，不着色。' : '颜色表示当日涨跌，红涨绿跌，方块大小相同。'}行情日期{' '}
+          {historical ? '历史快照，涨跌仅供复盘，不着色。' : '颜色表示当日涨跌，红涨绿跌，方块大小相同。'}行情日期{' '}
           {dates.length ? (dates.length > 1 ? `${dates[0]} ～ ${dates[dates.length - 1]}（各市场收盘时间不同）` : dates[0]) : '—'}
           。点击方块查看依据。
         </CardDescription>

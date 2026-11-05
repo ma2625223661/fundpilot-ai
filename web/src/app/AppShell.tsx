@@ -33,6 +33,7 @@ import { SectorSearchDialog, SectorSearchTrigger } from '@/components/sector-sea
 import { ThemeToggle } from '@/components/theme-toggle';
 import { VIEWS, goTo, type ViewId } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
+import { researchStatus } from '@/app/research/research-status';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { useWatchlist } from '@/app/research/WatchlistContext';
 import { sectorResearch } from '@/lib/research';
@@ -186,7 +187,7 @@ function SearchPalette({ open, setOpen }: { open: boolean; setOpen: (open: boole
 function SideFooter({ session, current }: { session: Session; current: ViewId }) {
   const { collapsed } = useSidebarMode();
   const research = useResearch();
-  const running = research.state.status === 'running';
+  const status = researchStatus(research.state, Boolean(research.report?.report_stale));
   const user = session.user;
   return (
     <SidebarFooter className="gap-2 p-3">
@@ -209,11 +210,8 @@ function SideFooter({ session, current }: { session: Session; current: ViewId })
         <div className="flex flex-col gap-1 rounded-lg bg-sidebar-accent p-3 text-xs">
           <span className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 font-medium text-sidebar-foreground">
-              <span
-                className={cn('size-2 rounded-full', research.state.connection_error ? 'bg-destructive' : running ? 'bg-warning' : 'bg-primary')}
-                aria-hidden="true"
-              />
-              {research.state.connection_error ? '研究服务未连接' : running ? '正在更新研究' : '研究服务运行中'}
+              <span className={cn('size-2 rounded-full', status.dot)} aria-hidden="true" />
+              {status.label}
             </span>
             {research.accountMode && <Badge variant="outline">{session.access.scope === 'cloud' ? '云端版' : '本地版'}</Badge>}
           </span>
@@ -240,6 +238,44 @@ function SideFooter({ session, current }: { session: Session; current: ViewId })
           </div>
         ))}
     </SidebarFooter>
+  );
+}
+
+// Short names for the phone tab bar; the sidebar keeps the full ones.
+const TAB_LABELS: Partial<Record<ViewId, string>> = { dash: '研究', data: '数据', history: '记录', cycle: '周期', settings: '设置' };
+
+/**
+ * Phones get the main pages as a bottom tab bar (as in Xueqiu or East Money),
+ * one tap from anywhere; the sidebar drawer still holds the watchlist and account.
+ */
+function MobileTabBar({ current }: { current: ViewId }) {
+  return (
+    <nav
+      aria-label="主要页面"
+      className="safe-inset-bottom fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background md:hidden"
+    >
+      <div className="grid grid-cols-5">
+        {VIEWS.map(view => {
+          const active = current === view.id || (current === 'sector' && view.id === 'dash');
+          return (
+            <Button
+              key={view.id}
+              variant="ghost"
+              aria-current={active ? 'page' : undefined}
+              aria-label={view.label}
+              className={cn(
+                'h-14 flex-col gap-1 rounded-none text-xs font-normal',
+                active ? 'text-primary' : 'text-muted-foreground',
+              )}
+              onClick={() => goTo(view.id)}
+            >
+              <view.icon className="size-5" aria-hidden="true" />
+              <span aria-hidden="true">{TAB_LABELS[view.id] ?? view.label}</span>
+            </Button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -276,9 +312,10 @@ export function AppShell({ session, view, children }: { session: Session; view: 
             <ThemeToggle />
           </div>
         </header>
-        <div id="main-content" tabIndex={-1} className="safe-bottom mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 py-6 outline-none">
+        <div id="main-content" tabIndex={-1} className="safe-bottom mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 py-6 outline-none max-md:safe-bottom-tabs">
           {children}
         </div>
+        <MobileTabBar current={view} />
       </SidebarInset>
       <SearchPalette open={searchOpen} setOpen={setSearchOpen} />
     </SidebarProvider>

@@ -1,7 +1,6 @@
 // The sector research home page (the old #dash view).
 import { useEffect, useState } from 'react';
-import { CircleAlert, CircleCheck, History, LoaderCircle, Maximize2, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
-import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
+import { History, Maximize2, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,6 +15,7 @@ import { MarketOverview, MarketQuotes } from '@/app/research/MarketOverview';
 import { SectorRankings } from '@/app/research/SectorRankings';
 import { SectorHeatmap } from '@/app/research/SectorHeatmap';
 import { useResearch } from '@/app/research/ResearchContext';
+import { researchStatus } from '@/app/research/research-status';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { sectorHref } from '@/app/navigation';
@@ -25,14 +25,6 @@ import type { Sector } from '@/lib/report';
 import { stamp, txt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const STATUS_TITLE: Record<string, string> = {
-  idle: '板块研究准备中',
-  running: '正在更新板块行情与分析',
-  ready: '本轮板块研究已完成',
-  error: '本轮板块研究暂未完成',
-};
-
-/** One status item: icon, label and time on one line; the longer explanation sits in a hover hint. */
 function StatusItem({ icon: Icon, tone, label, time, hint }: { icon: LucideIcon; tone?: string; label: string; time?: string; hint: string }) {
   return (
     <Tooltip>
@@ -53,13 +45,17 @@ function StatusItem({ icon: Icon, tone, label, time, hint }: { icon: LucideIcon;
   );
 }
 
-/** Research job, quote refresh and AI schedule on one line, each with its own time. */
+/**
+ * The one place for the research state: service status, quote refresh and AI
+ * schedule on one line, then (only when needed) the failure reason or the
+ * historical-snapshot notice with its way back to the latest report. Wording
+ * and colours come from researchStatus(), shared with the sidebar card.
+ */
 function StatusStrip() {
-  const { state } = useResearch();
+  const { state, report, notice, viewingHistory, returnLatest } = useResearch();
   const live = state.public_refresh;
-  const problem = Boolean(state.connection_error || state.status === 'error');
-  const running = state.status === 'running';
-  const title = state.connection_error ? '暂时无法连接板块研究服务' : STATUS_TITLE[state.status] || '正在连接板块研究服务';
+  const status = researchStatus(state, Boolean(report?.report_stale));
+  const problem = status.tone === 'error';
   const detail = state.connection_error
     ? state.connection_message
     : state.error
@@ -76,9 +72,9 @@ function StatusStrip() {
       <CardContent className="flex flex-col gap-2 text-sm">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2" role="status">
           <StatusItem
-            icon={problem ? CircleAlert : running ? LoaderCircle : CircleCheck}
-            tone={problem ? 'text-destructive' : 'text-primary'}
-            label={title}
+            icon={status.icon}
+            tone={status.text}
+            label={status.label}
             time={state.next_run_at ? '下次 ' + short(state.next_run_at) : undefined}
             hint={detail + (schedule ? '（' + schedule + '）' : '')}
           />
@@ -99,28 +95,24 @@ function StatusStrip() {
           />
         </div>
         {problem && <p className="text-sm text-destructive text-pretty">{detail}</p>}
+        {notice && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+            <p className="flex items-start gap-2 text-sm text-warning text-pretty" role="status">
+              <History className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>
+                {notice}
+                {report?.as_of && <span className="ml-1 text-muted-foreground tabular-nums">报告时间 {stamp(report.as_of)}</span>}
+              </span>
+            </p>
+            {viewingHistory && (
+              <Button size="sm" variant="outline" onClick={returnLatest}>
+                返回最新报告
+              </Button>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
-  );
-}
-
-function ReportNotice() {
-  const { notice, viewingHistory, returnLatest } = useResearch();
-  if (!notice) return null;
-  return (
-    <Alert>
-      <History aria-hidden="true" />
-      <AlertDescription className="text-pretty" role="status">
-        {notice}
-      </AlertDescription>
-      {viewingHistory && (
-        <AlertAction>
-          <Button size="sm" variant="outline" onClick={returnLatest}>
-            返回最新报告
-          </Button>
-        </AlertAction>
-      )}
-    </Alert>
   );
 }
 
@@ -194,7 +186,6 @@ export function DashView() {
       </header>
       {report && <MarketQuotes report={report} />}
       <StatusStrip />
-      <ReportNotice />
       <Tabs value={activeTab} onValueChange={value => chooseTab(String(value))} className="gap-4">
         <div className="overflow-x-auto overflow-y-hidden border-b border-border">
           <TabsList variant="line" aria-label="板块研究分区">

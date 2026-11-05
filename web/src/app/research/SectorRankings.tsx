@@ -73,7 +73,7 @@ export function SectorRankings({ report, onOpen }: { report: Report; onOpen: (id
         <CardTitle className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">板块排行</h2>
           <span className="text-xs font-normal text-muted-foreground">
-            {historical ? '历史报告，仅供复盘' : '按本份报告的行情与研究分排列'} · 点击名称查看依据
+            {historical ? '历史快照，仅供复盘' : '按本份报告的行情与研究分排列'} · 点击名称查看依据
           </span>
         </CardTitle>
       </CardHeader>

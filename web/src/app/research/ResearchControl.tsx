@@ -57,7 +57,7 @@ export function ResearchControl({ sector, report, onOpen }: { sector: Sector; re
   const price = creditText(choice.cost);
 
   const label = historical
-    ? '历史报告仅供复盘'
+    ? '历史快照仅供复盘'
     : job?.status === 'query_error'
       ? '查询研究进度'
       : busy

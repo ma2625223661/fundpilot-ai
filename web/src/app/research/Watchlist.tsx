@@ -314,7 +314,7 @@ export function Watchlist() {
           关注重点，一眼看清研究分、走势与风险。名单随账号保存，数据随报告更新。
           <span className="block tabular-nums">
             {report
-              ? (report.report_stale ? '历史报告 · ' : '当前报告 · ') + stamp(report.as_of) + '；历史或阶段分保留原有口径。'
+              ? (report.report_stale ? '历史快照 · ' : '当前报告 · ') + stamp(report.as_of) + '；历史或阶段分保留原有口径。'
               : '研究报告加载后展示分数与依据。'}
           </span>
         </CardDescription>
