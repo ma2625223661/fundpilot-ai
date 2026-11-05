@@ -25,10 +25,14 @@ describe('dashboard', () => {
     ]);
     const { container } = renderPage(<DashView />, { replies: baseReplies({}, value) });
     await screen.findByText('板块机会总览');
-    const rise = (await screen.findAllByText('+1.25%'))[0];
-    expect(rise.className).toContain('text-rise');
-    const fall = screen.getAllByText('-0.80%')[0];
-    expect(fall.className).toContain('text-fall');
+    // Text colour in the table and rankings; the heat map tiles carry it in the background token.
+    const rise = await screen.findAllByText('+1.25%');
+    expect(rise.some(node => node.className.includes('text-rise'))).toBe(true);
+    const fall = screen.getAllByText('-0.80%');
+    expect(fall.some(node => node.className.includes('text-fall'))).toBe(true);
+    const tile = (name: RegExp) => screen.getAllByRole('button', { name }).find(node => node.getAttribute('aria-label')?.includes('研究分'))!;
+    expect(tile(/^白酒，/).className).toContain('bg-fall/');
+    expect(tile(/^待补方向，/).className).toContain('bg-muted');
     // An unscored direction is listed only after it is selected, and then as unscored.
     expect(container.textContent).not.toMatch(/待补方向[^]*?\b0\.00\b/);
   });

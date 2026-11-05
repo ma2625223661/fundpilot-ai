@@ -9,12 +9,12 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Disclosure } from '@/components/research/common';
 import { AiPanel } from '@/app/research/AiPanel';
 import { BoardExplorer, useBoardView } from '@/app/research/BoardExplorer';
 import { ImportantEvents } from '@/app/research/Events';
 import { MarketOverview, MarketQuotes } from '@/app/research/MarketOverview';
 import { SectorRankings } from '@/app/research/SectorRankings';
+import { SectorHeatmap } from '@/app/research/SectorHeatmap';
 import { useResearch } from '@/app/research/ResearchContext';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
@@ -123,27 +123,6 @@ function ReportNotice() {
   );
 }
 
-function ReadingGuide() {
-  return (
-    <Disclosure title="这些分数怎么看？研究分、风险分和行情涨跌各自代表什么">
-      <div className="grid gap-3 md:grid-cols-3">
-        <div>
-          <b className="font-medium text-foreground">研究分：看证据强弱</b>
-          <p className="text-pretty">完整公司研究满分 100；基本面与走势合计满分 70，事件未评估时保留基础分。研究分不代表收益概率，不构成投资建议。</p>
-        </div>
-        <div>
-          <b className="font-medium text-foreground">风险分：越高越需留意</b>
-          <p className="text-pretty">市场压力与环境风险独立计算。情绪高代表活跃，过热还需关注拥挤；流动性高代表资金偏宽。</p>
-        </div>
-        <div>
-          <b className="font-medium text-foreground">涨跌幅：看样本当日表现</b>
-          <p className="text-pretty">涨跌幅与研究分不同，红色为涨、绿色为跌。灰色或“待评估”表示证据不够，不能当作 0 分或没有风险。</p>
-        </div>
-      </div>
-    </Disclosure>
-  );
-}
-
 const TAB_KEY = 'fundpilot_dash_tab_v1';
 
 /** The last homepage tab this viewer used (a per-browser convenience only). */
@@ -235,13 +214,13 @@ export function DashView() {
             </div>
           ) : (
             <>
+              <SectorHeatmap report={report} onOpen={openSector} />
               <MarketOverview report={report} />
               <SectorRankings report={report} onOpen={openSector} />
             </>
           )}
         </TabsContent>
         <TabsContent value="boards" keepMounted className="flex flex-col gap-4">
-          <ReadingGuide />
           {report ? <BoardExplorer board={board} onOpenDetail={() => setDetailOpen(true)} /> : <Skeleton className="h-96" />}
         </TabsContent>
         <TabsContent value="events" keepMounted>
