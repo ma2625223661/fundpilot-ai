@@ -1,5 +1,5 @@
 // The sector research home page (the old #dash view).
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleAlert, CircleCheck, History, LoaderCircle, Radio, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -161,8 +161,6 @@ export function DashView() {
   const board = useBoardView(report, research.selected);
   const subscription = useSubscription();
   const [detailOpen, setDetailOpen] = useState(false);
-  // Focus the panel heading on open, so the drawer starts at its top.
-  const detailHead = useRef<HTMLDivElement>(null);
   const detailSector: Sector | undefined = report?.sector_analysis.find((s: Sector) => s.id === board.current);
 
   // Watchlist shortcuts and finished personal research open a sector directly.
@@ -261,8 +259,8 @@ export function DashView() {
       </Tabs>
       {report && (
         <Sheet open={detailOpen && Boolean(detailSector)} onOpenChange={setDetailOpen}>
-          <SheetContent side="right" size="wide" className="gap-0 p-0" initialFocus={detailHead}>
-            <SheetHeader ref={detailHead} tabIndex={-1} className="border-b border-border pr-12 outline-none">
+          <SheetContent side="right" size="wide" className="gap-0 p-0">
+            <SheetHeader className="border-b border-border pr-12">
               <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
               <SheetDescription className="sr-only">{(detailSector?.title ?? '') + '：研究依据、数据缺口与公司证据'}</SheetDescription>
             </SheetHeader>

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DatedLine } from '@/components/charts';
+import { DatedLine } from '@/components/charts-lazy';
 import { BulletList, Disclosure, SourceLink, Stat } from '@/components/research/common';
 import { goTo } from '@/app/navigation';
 import { StatTile } from '@/components/page-header';

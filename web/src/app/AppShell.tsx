@@ -7,6 +7,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Clock, ExternalLink, LifeBuoy } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Sidebar,
   SidebarContent,
@@ -245,6 +246,15 @@ export function AppShell({ session, view, children }: { session: Session; view: 
   const [searchOpen, setSearchOpen] = useState(false);
   return (
     <SidebarProvider style={{ '--sidebar-width': '17rem' } as CSSProperties}>
+      {/* First stop for keyboard users: skip the sidebar and header. A button, not
+          an in-page link, because the location hash selects the page here. */}
+      <Button
+        variant="default"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50"
+        onClick={() => document.getElementById('main-content')?.focus()}
+      >
+        跳到主要内容
+      </Button>
       <Sidebar collapsible="icon" variant="inset">
         <SideHeader onSearch={() => setSearchOpen(true)} />
         <SidebarContent className="gap-1">
@@ -265,7 +275,9 @@ export function AppShell({ session, view, children }: { session: Session; view: 
             <ThemeToggle />
           </div>
         </header>
-        <div className="safe-bottom mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 py-6">{children}</div>
+        <div id="main-content" tabIndex={-1} className="safe-bottom mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6 px-4 py-6 outline-none">
+          {children}
+        </div>
       </SidebarInset>
       <SearchPalette open={searchOpen} setOpen={setSearchOpen} />
     </SidebarProvider>

@@ -2,14 +2,14 @@
 // and are re-read whenever the theme switches. No gradients, shadows or 3D.
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
-import { GaugeChart, LineChart } from 'echarts/charts';
+import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
-echarts.use([GaugeChart, LineChart, GridComponent, TooltipComponent, SVGRenderer]);
+echarts.use([LineChart, GridComponent, TooltipComponent, SVGRenderer]);
 
 export function cssColor(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -32,43 +32,6 @@ function useChart(build: () => EChartsCoreOption, deps: unknown[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme, ...deps]);
   return box;
-}
-
-/**
- * A 0–100 gauge for a single index. A missing score draws an empty track and no
- * pointer, never a zero. The number itself is printed next to the chart by the
- * caller, so the chart is decorative for assistive technology.
- */
-export function ScoreGauge({ score, colorVar = '--chart-1', className }: { score: number | null; colorVar?: string; className?: string }) {
-  const box = useChart(() => {
-    const border = cssColor('--border');
-    const color = cssColor(colorVar);
-    return {
-      animation: true,
-      series: [
-        {
-          type: 'gauge',
-          startAngle: 200,
-          endAngle: -20,
-          min: 0,
-          max: 100,
-          radius: '100%',
-          center: ['50%', '62%'],
-          progress: { show: score !== null, width: 10, itemStyle: { color } },
-          axisLine: { lineStyle: { width: 10, color: [[1, border]] } },
-          pointer: { show: false },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          axisLabel: { show: false },
-          anchor: { show: false },
-          title: { show: false },
-          detail: { show: false },
-          data: score === null ? [] : [{ value: score }],
-        },
-      ],
-    };
-  }, [score, colorVar]);
-  return <div ref={box} aria-hidden="true" className={cn('h-24 w-40', className)} />;
 }
 
 /**

@@ -50,13 +50,13 @@ export function IndicatorIcon({ indicator, withLabel = false }: { indicator: Ind
     <Tooltip>
       <TooltipTrigger
         render={
+          // Not focusable: a focusable hint inside a dialog would open its own popup and
+          // break the dialog's focus trap. The reason is also written out as text
+          // where it matters (sector detail), and screen readers get it here.
           <span
-            tabIndex={0}
+            role="img"
             aria-label={description}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-sm text-xs font-medium focus-visible:outline-2 focus-visible:outline-ring',
-              critical ? 'text-destructive' : 'text-tier-optimistic',
-            )}
+            className={cn('inline-flex items-center gap-1 text-xs font-medium', critical ? 'text-destructive' : 'text-tier-optimistic')}
           >
             <Icon className="size-3.5" aria-hidden="true" />
             {withLabel && indicator.label}

@@ -6,7 +6,7 @@ import { Check, Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DatedLine } from '@/components/charts';
+import { DatedLine } from '@/components/charts-lazy';
 import { BulletList, Disclosure, Eyebrow, IndicatorIcon, SourceLink, Stat } from '@/components/research/common';
 import { CompanyEvidence } from '@/app/research/CompanyEvidence';
 import { EventCard, EventList } from '@/app/research/Events';
@@ -452,6 +452,11 @@ export function SectorDetail({ report, sectorId, framed = true }: { report: Repo
                 );
               })}
             </dl>
+            {indicator?.reason && (
+              <p className={cn('text-sm text-pretty', indicator.className === 'risk-critical' ? 'text-destructive' : 'text-tier-optimistic')}>
+                {indicator.label}：{indicator.reason}
+              </p>
+            )}
             <ScoreSummary sector={sector} />
             {sector.requirements?.length > 0 && (
               <div className="grid gap-2 sm:grid-cols-3">

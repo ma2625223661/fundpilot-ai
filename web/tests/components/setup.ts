@@ -27,7 +27,6 @@ Element.prototype.scrollIntoView = () => {};
 
 // Charts draw with ECharts, which needs real layout; the tests check text instead.
 vi.mock('@/components/charts', () => ({
-  ScoreGauge: () => null,
   DatedLine: ({ label }: { label: string }) => label,
   cssColor: () => '',
 }));

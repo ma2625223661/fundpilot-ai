@@ -1,32 +1,43 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppShell } from '@/app/AppShell';
 import { useView, type ViewId } from '@/app/navigation';
-import { CycleView } from '@/app/views/CycleView';
 import { DashView } from '@/app/views/DashView';
-import { DataView } from '@/app/views/DataView';
-import { HistoryView } from '@/app/views/HistoryView';
-import { SettingsView } from '@/app/views/SettingsView';
 import { ResearchProvider } from '@/app/research/ResearchContext';
 import { SubscriptionProvider } from '@/app/research/SubscriptionContext';
 import { WatchlistProvider } from '@/app/research/WatchlistContext';
 import { ApiError } from '@/lib/api';
 import { loadSession, watchSession, type Session } from '@/lib/session';
 
-const PAGES: Record<ViewId, () => React.ReactNode> = {
+// The home page loads with the app; the other pages are fetched the first time
+// they are opened, so the first visit downloads only what the home page needs.
+const PAGES: Record<ViewId, ComponentType> = {
   dash: DashView,
-  data: DataView,
-  history: HistoryView,
-  cycle: CycleView,
-  settings: SettingsView,
+  data: lazy(() => import('@/app/views/DataView').then(module => ({ default: module.DataView }))),
+  history: lazy(() => import('@/app/views/HistoryView').then(module => ({ default: module.HistoryView }))),
+  cycle: lazy(() => import('@/app/views/CycleView').then(module => ({ default: module.CycleView }))),
+  settings: lazy(() => import('@/app/views/SettingsView').then(module => ({ default: module.SettingsView }))),
 };
+
+function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true" aria-label="正在载入页面">
+      <Skeleton className="h-16" />
+      <Skeleton className="h-72" />
+    </div>
+  );
+}
 
 function CurrentView({ view }: { view: ViewId }) {
   const Page = PAGES[view];
-  return <Page />;
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Page />
+    </Suspense>
+  );
 }
 
 export function App() {
