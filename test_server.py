@@ -428,9 +428,11 @@ class ClientReportViewTests(unittest.TestCase):
         report = {'as_of': 'x', 'sector_analysis': [{'id': 'sector_liquor', 'leaders': [leader]}, {'id': 'bond'}],
                   'company_evidence': {'status': 'ok', 'sector_leaders': {'sector_liquor': [leader]}}}
         view = client_report_view(report)
-        self.assertNotIn('history', view['sector_analysis'][0]['leaders'][0])
+        # The sector card's copy of the sample list is dropped; company evidence keeps it.
+        self.assertNotIn('leaders', view['sector_analysis'][0])
+        self.assertEqual(view['sector_analysis'][0]['id'], 'sector_liquor')
         self.assertNotIn('history', view['company_evidence']['sector_leaders']['sector_liquor'][0])
-        self.assertEqual(view['sector_analysis'][0]['leaders'][0]['quote'], {'close': 1})
+        self.assertEqual(view['company_evidence']['sector_leaders']['sector_liquor'][0]['quote'], {'close': 1})
         self.assertEqual(view['sector_analysis'][1], {'id': 'bond'})
         self.assertIn('history', report['sector_analysis'][0]['leaders'][0])
         self.assertIn('history', report['company_evidence']['sector_leaders']['sector_liquor'][0])

@@ -562,13 +562,14 @@ def run_auto_research(progress=None, previous=None, refresh=False):
 
 
 def client_report_view(report):
-    """Browser payload: drop per-company daily histories the page never reads.
+    """Browser payload: drop what the page never reads.
 
-    Each sample company carries ~120 adjusted closes, stored twice (sector cards
-    and company evidence); together they were about half of the report. The page
-    uses only quotes, financials and memberships, while server-side features such
-    as the five-day review still read the full report. Shallow copies only: the
-    cached report itself is never modified.
+    Each sample company carries ~120 adjusted closes, and the sector cards repeat
+    the whole company sample list that company_evidence already holds. The page
+    uses only company_evidence quotes, financials and memberships, while
+    server-side features such as the five-day review still read the full report
+    (sector leaders with history). Shallow copies only: the cached report itself
+    is never modified.
     """
     if not isinstance(report, dict):
         return report
@@ -578,7 +579,9 @@ def client_report_view(report):
                 for row in rows] if isinstance(rows, list) else rows
     view = dict(report)
     if isinstance(report.get('sector_analysis'), list):
-        view['sector_analysis'] = [{**sector, 'leaders': strip(sector['leaders'])}
+        # sector['leaders'] repeats company_evidence.sector_leaders row for row;
+        # both the React and the legacy page read only the latter (about 1.3 MB saved).
+        view['sector_analysis'] = [{key: value for key, value in sector.items() if key != 'leaders'}
                                    if isinstance(sector, dict) and 'leaders' in sector else sector
                                    for sector in report['sector_analysis']]
     evidence = report.get('company_evidence')

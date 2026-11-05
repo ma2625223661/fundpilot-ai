@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from research_sample_policy import finalize_company_samples, fair_codes, MAX_SAMPLES
+from research_sample_policy import finalize_company_samples, fair_codes, provider_basis, MAX_SAMPLES, VERIFIED_MARK
 from research_leader_index import build_indicator
 from test_research_leader_index import member, NOW, BOARD
 
@@ -53,6 +53,28 @@ class ExpandedSampleTests(unittest.TestCase):
         company = {'sector_leaders': {'test': rows}}
         finalize_company_samples(company, NOW)
         self.assertFalse(build_indicator(BOARD, company['sector_leaders']['test'], NOW)['meta']['ready'])
+
+    def test_reused_samples_do_not_repeat_the_verification_sentence(self):
+        company = {'sector_leaders': {'test': self.rows()}}
+        finalize_company_samples(company, NOW)
+        first = [r['selection_basis'] for r in company['sector_leaders']['test']]
+        # A later refresh reuses the selected rows, as the auto research does.
+        finalize_company_samples(company, NOW)
+        second = [r['selection_basis'] for r in company['sector_leaders']['test']]
+        self.assertEqual(first, second)
+        self.assertTrue(all(text.count('数据核验通过') == 1 for text in second))
+
+    def test_already_repeated_text_is_cleaned_on_the_next_refresh(self):
+        rows = self.rows()
+        tail = VERIFIED_MARK + '市值/固定池代表样本；近期61个交易日走势完整。'
+        for row in rows:
+            row['selection_basis'] = '官方成分市值代表' + tail * 3
+        company = {'sector_leaders': {'test': rows}}
+        finalize_company_samples(company, NOW)
+        for row in company['sector_leaders']['test']:
+            self.assertTrue(row['selection_basis'].startswith('官方成分市值代表' + VERIFIED_MARK))
+            self.assertEqual(row['selection_basis'].count('数据核验通过'), 1)
+        self.assertEqual(provider_basis(None), '')
 
     def test_round_robin_requests_do_not_starve_sectors_or_truncate_to_180(self):
         pools = {str(i): [{'ts_code': f'{i}-{j}'} for j in range(12)] for i in range(40)}
