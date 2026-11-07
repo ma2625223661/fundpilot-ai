@@ -397,7 +397,7 @@
 - 默认前端：计划原本要把代码默认值（`research_frontend.py`）改成 `react`。检查后发现 `web/dist-react/` 不进 git，原生 VPS 安装脚本也不构建前端，直接改默认值会让新克隆的仓库和原生部署因"新版网页尚未构建"而无法启动。因此改为：
   - Docker 镜像（内含构建产物）设置 `ENV FUNDPILOT_FRONTEND=react`，云端和 Docker 部署默认用新版；`.env` 中写 `FUNDPILOT_FRONTEND=legacy` 可回退。
   - 本地 Windows 版的启动脚本早已默认新版。
-  - 原生 VPS 仍默认旧版；`deploy/vps/NATIVE-OPERATIONS.md` 新增切换步骤（先构建，再在 `.env` 中设置）。`docs/云端多人版部署.md` 的变量表补了 `FUNDPILOT_FRONTEND`。
+  - 原生 VPS 仍默认旧版；`deploy/vps/NATIVE-OPERATIONS.md` 新增切换步骤（先构建，再在 `.env` 中设置）。`docs/部署运维/云端多人版部署.md` 的变量表补了 `FUNDPILOT_FRONTEND`。
 - README 更正：
   - 启动路径改为 `start.cmd`、`启动网站.vbs`、`runtime\python.exe launch.py`；
   - 档位配色改为现行的蓝、灰、琥珀、紫，并说明红涨绿跌；
@@ -458,6 +458,22 @@
 6. 变动提醒：连续两个交易日运行后，确认关注卡片和铃铛中的变动与两天报告一致。
 7. 手机：在 iOS Safari 和 Android Chrome 上试"添加到主屏幕"，从主屏图标打开后能正常登录和使用。
 8. 系统通知：在自己的浏览器里（需要 HTTPS，或在运行网站的电脑上用 127.0.0.1 打开）打开铃铛中的"后台时发系统通知"并允许，切到其他标签页，等出现明显变动的新报告，确认弹出通知、点击后打开对应板块页，且同一变动当天不再重复提醒。
+
+## 项目目录整理（2026-11-07）
+
+根目录原有 217 个文件，整理后约 20 个：
+- `backend/`：`server.py`、`cloud_server.py`、`cloud_admin.py`、`launch.py` 和 73 个 `research_*.py`。模块名不变，测试里 238 处 `patch('research_…')` 不用改。
+- `tests/backend/`：95 个后端测试，以及 `test_fixtures/`、`test_helpers/`；`tests/run_backend.py` 负责把 `backend/` 和测试目录加入导入路径，`tests/backend/conftest.py` 供 pytest 使用。
+- `tests/legacy-frontend/`：26 个旧版网页测试和 `helpers/`。`web/scripts/port-legacy.mjs` 改为从这里读取，生成到 `web/tests/legacy/` 的内容逐字节不变。
+- `docs/` 分为 `使用说明/`、`部署运维/`、`研究方法/`、`开发记录/`，新增 `docs/README.md` 索引；仓库内引用旧路径的地方都已改为新路径。
+- `data/`、`backups/`、`runtime/`、`dist/`、`web/` 位置不变。
+
+要点：
+- `server.py`、`launch.py` 中的 `ROOT` 仍指项目根目录；把缓存写在 `data/` 的模块改为向上找一级。
+- 自带运行环境 `runtime/python315._pth` 只把项目根目录加入导入路径（`..`），不会加入被启动脚本所在的目录。所以 7 个可以直接启动的模块（launch、server、cloud_server、cloud_admin 和 3 个工作子进程）开头会自己把 `backend/` 加入路径。没有改 `runtime/`，因为它不在仓库里，而是随安装包分发，已安装的副本收不到修改。
+- 已同步：双击脚本、Dockerfile 与 `.dockerignore`、VPS 的 systemd 启动路径、热重载监视 `backend/*.py`。已部署的原生服务器需要按 `deploy/vps/NATIVE-OPERATIONS.md` 手动改一次启动路径。
+- 顺带还原了 6 个文件在之前几轮被改动的换行符（Windows 上用 Python 写文件会变成 CRLF），单独提交，内容不变。
+- 验证：后端全量 1236 项（跳过 2 项）、旧版网页测试 165 项都在新位置通过；`launch.py --check` 用自带运行环境通过；测试服务器从 `backend/cloud_server.py` 启动，完整跑完一轮研究，变动对比正常。后端全量测试连跑三次，有一次出现 1 个错误，另外两次全部通过，没能复现，估计是与时间有关的偶发问题。
 
 ## 必须遵守的约束
 

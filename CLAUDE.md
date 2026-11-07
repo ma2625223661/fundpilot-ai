@@ -7,7 +7,9 @@
 
 - `dist/`：旧版前端（原生 HTML/CSS/JS），迁移完成前继续线上运行。**只修 bug，不加新功能。**
 - `web/`：新版前端，技术栈为 React 19 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui（底层 Base UI）+ lucide-react + ECharts 6。
-- 后端：Python（`server.py` 本地版、`cloud_server.py` 云端版），前端只通过 `/api/*` JSON 接口与它通信。
+- `backend/`：后端 Python（`server.py` 本地版、`cloud_server.py` 云端版、`launch.py` 启动器，以及 `research_*.py` 研究模块），前端只通过 `/api/*` JSON 接口与它通信。模块按名字互相导入；数据仍写在项目根目录的 `data/`。
+- `tests/`：`tests/backend/` 后端测试（用 `runtime/python.exe -B tests/run_backend.py` 运行），`tests/legacy-frontend/` 旧版网页测试。
+- `docs/`：文档，分为 `使用说明/`、`部署运维/`、`研究方法/`、`开发记录/`；索引见 `docs/README.md`。
 
 常用命令（在 `web/` 下执行）：
 
@@ -109,4 +111,4 @@
 
 ## 当前任务
 
-前端正在重写为 React，进度、已定方案、下一步和后端耦合点见 `docs/react-migration.md`。开始工作前先读它。
+前端正在重写为 React，进度、已定方案、下一步和后端耦合点见 `docs/开发记录/react-migration.md`。开始工作前先读它。

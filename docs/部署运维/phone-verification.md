@@ -52,4 +52,4 @@
 | `POST /api/me/phone/send` | 已登录用户请求绑定验证码，`{phone}` |
 | `POST /api/me/phone/bind` | `{phone,challenge_id,code,password}` |
 
-测试使用临时数据库及注入的假发送器，只在测试中捕获验证码，不向真实号码发送。运行 `python -m unittest test_phone_auth test_phone_http test_cloud_accounts test_local_accounts` 和 `node --test test_phone_frontend.cjs`。
+测试使用临时数据库及注入的假发送器，只在测试中捕获验证码，不向真实号码发送。运行 `runtime\python.exe -B tests\run_backend.py test_phone_auth test_phone_http test_cloud_accounts test_local_accounts` 和 `node --test tests/legacy-frontend/test_phone_frontend.cjs`。

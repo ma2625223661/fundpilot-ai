@@ -27,8 +27,8 @@
 验证命令：
 
 ```powershell
-E:\python\python.exe -B -m unittest test_research_subscriptions test_cloud_accounts test_local_accounts -q
-node --test test_ai_subscription.cjs
+runtime\python.exe -B tests\run_backend.py -q test_research_subscriptions test_cloud_accounts test_local_accounts
+node --test tests/legacy-frontend/test_ai_subscription.cjs
 ```
 
 测试全部使用隔离账号和模拟 AI 报告，不调用收费模型。浏览器隔离预览验证管理员开通、用户解锁、重复操作防重、暂停访问及手机布局。
