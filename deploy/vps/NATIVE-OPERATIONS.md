@@ -34,7 +34,9 @@
    sudo /opt/fundpilot/.venv/bin/pip install -r /opt/fundpilot/requirements-cloud.txt
    ```
 
-4. 重启网站，使代码或环境配置生效：
+4. 原生部署默认仍是旧版页面 `dist/`（Docker 镜像已默认新版）。改用新版 React 界面时，在本机或服务器的 `web/` 目录运行 `npm ci && npm run build`，确认 `/opt/fundpilot/web/dist-react/` 存在后，在 `deploy/vps/.env` 中加一行 `FUNDPILOT_FRONTEND=react`。之后每次更新代码，都要重新构建并同步 `web/dist-react/`；构建产物缺失时网站会拒绝启动，并提示运行 `npm run build`。删除这一行即可回到旧版。
+
+5. 重启网站，使代码或环境配置生效：
 
    ```bash
    sudo systemctl restart fundpilot
@@ -42,7 +44,7 @@
 
    只有修改了 systemd unit 文件时，才在重启前执行 `sudo systemctl daemon-reload`。普通网页、程序或 `.env` 更新不需要重装 Caddy、cron，也不需要重跑安装脚本。
 
-5. 检查服务状态、日志及内部 HTTP 响应：
+6. 检查服务状态、日志及内部 HTTP 响应：
 
    ```bash
    sudo systemctl status fundpilot --no-pager

@@ -2,6 +2,7 @@
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
+if not defined FUNDPILOT_FRONTEND set "FUNDPILOT_FRONTEND=react"
 "%~dp0runtime\python.exe" -B "%~dp0launch.py" --check
 set "fundpilot_exit=%errorlevel%"
 echo.

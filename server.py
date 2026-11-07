@@ -19,6 +19,7 @@ from research_ai_config import AIConfigStore
 from research_sectors import run_sector_research
 from research_sector_ai import enrich_sector_report
 from research_free_config import FreeDataConfigStore
+from research_frontend import resolve_frontend
 from research_public_config import PublicDataConfigStore
 from research_schedule import default_market_schedule
 
@@ -318,7 +319,8 @@ class Handler(SimpleHTTPRequestHandler):
             if summary:
                 return self.reply(200, engine.status(include_report=False))
             value = engine.status()
-            return self.reply(200, {**value, 'report': client_report_view(value.get('report'))})
+            return self.reply(200, {**value, 'report': client_report_view(
+                value.get('report'), compact_sources=getattr(getattr(self.server, 'frontend', None), 'kind', None) == 'react')})
         if parsed.path == '/api/research':
             return self.reply(410, {'error': '基金研究已移除；当前仅研究板块，请使用 /api/auto/report',
                                     'research_scope': 'sectors'})
@@ -431,10 +433,12 @@ class Handler(SimpleHTTPRequestHandler):
         return self.reply(404, {'error': '接口不存在'})
 
 
-def create_server(port=8765, *, require_login=True, local_only=False):
+def create_server(port=8765, *, require_login=True, local_only=False, frontend=None):
     # local_only: only this computer can open the site (no phone/LAN access).
+    frontend = frontend or resolve_frontend(ROOT, os.environ)
     server = BoundedThreadingHTTPServer(('127.0.0.1' if local_only else '0.0.0.0', port),
-                                        partial(Handler, directory=str(ROOT / 'dist')))
+                                        partial(Handler, directory=str(frontend.folder)))
+    server.frontend = frontend
     server.local_only = local_only
     addresses = {'127.0.0.1', 'localhost'}
     if not local_only:

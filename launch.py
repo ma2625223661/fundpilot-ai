@@ -83,10 +83,14 @@ def self_check():
     from zoneinfo import ZoneInfo
     ZoneInfo('Asia/Shanghai')
     ZoneInfo('America/New_York')
-    for file in ('index.html', 'styles.css', 'sector-history.js',
-                 'sector-research.js', 'sector-research.css', 'responsive.css', 'device-access.js'):
-        if not (ROOT / 'dist' / file).is_file():
-            raise RuntimeError(f'缺少网页文件：{file}')
+    from research_frontend import LEGACY, resolve_frontend
+    frontend = resolve_frontend(ROOT, os.environ)  # the React build checks its own manifest
+    if frontend.kind == LEGACY:
+        for file in ('index.html', 'styles.css', 'sector-history.js',
+                     'sector-research.js', 'sector-research.css', 'responsive.css', 'device-access.js'):
+            if not (frontend.folder / file).is_file():
+                raise RuntimeError(f'缺少网页文件：{file}')
+    print(f'  网页：{frontend.folder.relative_to(ROOT)}（{len(frontend.assets)} 个文件）')
     print('环境检查通过；未发送数据请求，也未调用 AI。')
     return 0
 
@@ -215,9 +219,10 @@ def enable_log_file(root=ROOT):
 def watched_files(root=ROOT):
     """Backend sources by mtime, plus the set of page files.
 
-    Page content (dist/*) is read from disk on every request, so editing it needs
-    no restart; only adding or removing a page file does (the asset list is built
-    at startup). Tests are not watched."""
+    Page content (dist/*, web/dist-react/*) is read from disk on every request, so
+    editing it needs no restart; only adding or removing a page file does (the asset
+    list is built at startup). A React rebuild renames its hashed files, so it counts
+    as adding and removing. Tests are not watched."""
     files = {}
     for path in root.glob('*.py'):
         if not path.name.startswith('test_'):
@@ -225,9 +230,10 @@ def watched_files(root=ROOT):
                 files[path.name] = path.stat().st_mtime_ns
             except OSError:
                 pass
-    for path in (root / 'dist').glob('*'):
-        if path.is_file():
-            files['dist/' + path.name] = 'present'
+    for folder in ('dist', 'web/dist-react'):
+        for path in (root / folder).glob('*'):
+            if path.is_file():
+                files[folder + '/' + path.name] = 'present'
     return files
 
 

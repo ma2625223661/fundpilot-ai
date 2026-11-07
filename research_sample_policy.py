@@ -14,6 +14,18 @@ SELECTION_METHOD = ('每方向在已核验归属池内按有效市值或明示�
     '缺项不当作0，未通过数据核验的候选单列。不是全市场选股或上涨承诺。')
 
 
+# The verification sentence appended below. A sample reused from the previous
+# report already carries it, so it is cut off before appending again; without
+# this, every refresh repeated it and one string grew past 2 KB.
+VERIFIED_MARK = '；数据核验通过；'
+
+
+def provider_basis(text):
+    """The provider's own selection basis, without any verification sentences added earlier."""
+    text = text if isinstance(text, str) else ''
+    return text.split(VERIFIED_MARK, 1)[0]
+
+
 def fair_codes(pools):
     """Round-robin sectors so a request deadline cannot starve later sectors."""
     rows = list(pools.values())
@@ -99,7 +111,7 @@ def finalize_company_samples(company, as_of):
         selected = (core + others)[:MAX_SAMPLES]
         for row in selected:
             positive = [k for k, value in row['quality_conditions'].items() if value]
-            row['selection_basis'] = (row.get('selection_basis', '') + '；数据核验通过；'
+            row['selection_basis'] = (provider_basis(row.get('selection_basis', '')) + VERIFIED_MARK
                 + (('小市值代表样本' if company.get('selection_universes', {}).get(identity, {}).get('order') == 'smallest_market_cap' else '市值/固定池代表样本') if row in core else '财务条件补充样本')
                 + ('；' + '、'.join(positive) if positive else '；未声称业绩增长')
                 + '；近期61个交易日走势完整。')

@@ -86,12 +86,11 @@ def enable_local_accounts(service, root):
     from research_personal_ai import personalized_runner
     service.auto_engine.ai_runner = personalized_runner(service.accounts.subscriptions)
     service.auth_mode = 'local'
-    service.site_root = root
     service.public_url = f'http://127.0.0.1:{service.server_port}'
     service.development = False
     service.secure = False
     service.setup_token = ''
     service.registration_open = True
-    service.assets = {file.name for file in (root / 'dist').iterdir()
-        if file.is_file() and not file.is_symlink() and file.suffix in ('.js','.css','.svg','.png','.ico')}
-    service.RequestHandlerClass = partial(LocalAccountHandler,directory=str(root / 'dist'))
+    # The frontend was chosen when the server was created; only the handler changes.
+    service.assets = service.frontend.assets
+    service.RequestHandlerClass = partial(LocalAccountHandler,directory=str(service.frontend.folder))

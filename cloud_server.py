@@ -21,6 +21,7 @@ from research_ai_config import AIConfigStore, _validate_key, _validate_model, va
 from research_auto import AutoResearchEngine, client_report_view
 from research_categories import BOARDS
 from research_free_config import FreeDataConfigStore
+from research_frontend import resolve_frontend
 from research_public_config import PublicDataConfigStore
 from research_schedule import default_market_schedule
 from research_sector_ai import enrich_sector_report
@@ -32,8 +33,6 @@ from research_data import CHINA
 from datetime import datetime
 
 COOKIE = 'fundpilot_session'
-PUBLIC_FILES = {'login.html', 'login.js', 'login.css', 'phone-verification.js',
-                'ai-service.html', 'ai-service.css', 'qq-support.png'}
 
 
 class CloudAIConfigStore(AIConfigStore):
@@ -269,7 +268,7 @@ class CloudHandler(Handler):
             except AccountError as error:
                 return self.reply(error.status, {'error': str(error)})
             return self.reply(200, self.server.captcha.issue())
-        if path in {'/' + name for name in PUBLIC_FILES}:
+        if path.startswith('/') and path[1:] in self.server.frontend.public:
             return super().do_HEAD() if self.command == 'HEAD' else super().do_GET()
         user = self.identity()
         if not user:
@@ -350,7 +349,8 @@ class CloudHandler(Handler):
                     value['ai_config'] = {**value['ai_config'], 'key_hint': ''}
             if isinstance(value.get('report'), dict):
                 value = dict(value)
-                value['report'] = client_report_view(self.member_report(value['report'], user))
+                value['report'] = client_report_view(self.member_report(value['report'], user),
+                                                     compact_sources=getattr(getattr(self.server, 'frontend', None), 'kind', None) == 'react')
             value = dict(value)
             value['ai_subscription'] = self.server.accounts.subscriptions.summary(user['id'])
             if value.get('report_version'):
@@ -367,7 +367,11 @@ class CloudHandler(Handler):
             return self.reply(200, {'config': self.server.data_config.status(),
                                    'supplemental': self.server.public_data_config.status()})
         if path in ('/', '/index.html'):
-            html = (getattr(self.server, 'site_root', ROOT) / 'dist' / 'index.html').read_text(encoding='utf-8')
+            frontend = self.server.frontend
+            html = (frontend.folder / 'index.html').read_text(encoding='utf-8')
+            if not frontend.injects_cloud_scripts:
+                # The React build finds its mode through /api/access and /session-context.js.
+                return self.bytes_reply(200, html.encode('utf-8'), 'text/html; charset=utf-8')
             html = html.replace('报告保存在当前浏览器，最多保留20份。', '个人记录保存到当前账号，最多保留20份。')
             html = html.replace('<script src="sector-history.js"', '<script src="session-context.js" defer></script><script src="cloud-session.js" defer></script><script src="sector-history.js"')
             html = html.replace('</head>', '<link rel="stylesheet" href="cloud-account.css?v=20261102-phone1"><link rel="stylesheet" href="ai-subscription.css?v=20261102-clickresearch3"><script src="ai-subscription.js?v=20261102-clickresearch3" defer></script><script src="phone-verification.js?v=20261102-phone1" defer></script><script src="phone-account.js?v=20261102-phone1" defer></script><script src="cloud-account.js?v=20261102-phone1" defer></script></head>')
@@ -557,8 +561,10 @@ class CloudHandler(Handler):
             return self.reply(400, {'error': '参数无效，请检查输入内容'})
 
 
-def create_cloud_server(port=8080, state_dir=None, public_url=None, development=False, environ=None, runner=None):
+def create_cloud_server(port=8080, state_dir=None, public_url=None, development=False, environ=None, runner=None,
+                        frontend=None):
     environment = os.environ if environ is None else environ
+    frontend = frontend or resolve_frontend(ROOT, environment)
     folder = Path(state_dir or environment.get('FUNDPILOT_STATE_DIR', ROOT / 'data' / 'cloud')).resolve()
     if not development and not state_dir and not environment.get('FUNDPILOT_STATE_DIR'):
         raise RuntimeError('云端启动需要 FUNDPILOT_STATE_DIR 指向持久卷目录')
@@ -567,7 +573,7 @@ def create_cloud_server(port=8080, state_dir=None, public_url=None, development=
     if bind_host not in ('127.0.0.1', '0.0.0.0'):
         raise RuntimeError('FUNDPILOT_BIND_HOST 仅支持 127.0.0.1 或 0.0.0.0')
     service = BoundedThreadingHTTPServer((bind_host, port),
-        partial(CloudHandler, directory=str(ROOT / 'dist')))
+        partial(CloudHandler, directory=str(frontend.folder)))
     try:
         service.trusted_proxies = trusted_proxies
         origin = public_url or environment.get('FUNDPILOT_PUBLIC_URL')
@@ -589,8 +595,8 @@ def create_cloud_server(port=8080, state_dir=None, public_url=None, development=
         if not development and service.accounts.needs_setup() and len(service.setup_token) < 32:
             raise RuntimeError('首次上线请在平台设置至少 32 个字符的随机 FUNDPILOT_SETUP_TOKEN')
         service.registration_open = environment.get('FUNDPILOT_REGISTRATION_OPEN', '1') == '1'
-        service.assets = {file.name for file in (ROOT / 'dist').iterdir()
-                          if file.is_file() and not file.is_symlink() and file.suffix in ('.js', '.css', '.svg', '.png', '.ico')}
+        service.frontend = frontend
+        service.assets = frontend.assets
         service.allowed_hosts = {parsed.netloc}
         service.research_scope = 'sectors'
         service.ai_config = CloudAIConfigStore(folder / 'ai-settings.json', environment)

@@ -561,14 +561,15 @@ def run_auto_research(progress=None, previous=None, refresh=False):
                           'runs_while_server_online': True, 'trade_execution': False}}
 
 
-def client_report_view(report):
-    """Browser payload: drop per-company daily histories the page never reads.
+def client_report_view(report, *, compact_sources=False):
+    """Browser payload: drop what the page never reads.
 
-    Each sample company carries ~120 adjusted closes, stored twice (sector cards
-    and company evidence); together they were about half of the report. The page
-    uses only quotes, financials and memberships, while server-side features such
-    as the five-day review still read the full report. Shallow copies only: the
-    cached report itself is never modified.
+    Each sample company carries ~120 adjusted closes, and the sector cards repeat
+    the whole company sample list that company_evidence already holds. The page
+    uses only company_evidence quotes, financials and memberships, while
+    server-side features such as the five-day review still read the full report
+    (sector leaders with history). Shallow copies only: the cached report itself
+    is never modified.
     """
     if not isinstance(report, dict):
         return report
@@ -578,13 +579,44 @@ def client_report_view(report):
                 for row in rows] if isinstance(rows, list) else rows
     view = dict(report)
     if isinstance(report.get('sector_analysis'), list):
-        view['sector_analysis'] = [{**sector, 'leaders': strip(sector['leaders'])}
+        # sector['leaders'] repeats company_evidence.sector_leaders row for row;
+        # both the React and the legacy page read only the latter (about 1.3 MB saved).
+        view['sector_analysis'] = [{key: value for key, value in sector.items() if key != 'leaders'}
                                    if isinstance(sector, dict) and 'leaders' in sector else sector
                                    for sector in report['sector_analysis']]
     evidence = report.get('company_evidence')
     if isinstance(evidence, dict) and isinstance(evidence.get('sector_leaders'), dict):
         view['company_evidence'] = {**evidence, 'sector_leaders': {key: strip(rows)
                                     for key, rows in evidence['sector_leaders'].items()}}
+    if compact_sources:
+        view = compact_sector_sources(view)
+    return view
+
+
+def compact_sector_sources(view):
+    """Send each sector source as its id when snapshot.sources holds the identical record.
+
+    Sectors repeat the same source records (2832 copies of 1344 ids, ~1.7 MB),
+    and every one of them is already in snapshot.sources. Only the React page,
+    which expands the ids again before reading the report, receives this form;
+    a record without an identical snapshot copy is sent in full.
+    """
+    snapshot = view.get('snapshot')
+    sectors = view.get('sector_analysis')
+    if not isinstance(snapshot, dict) or not isinstance(sectors, list):
+        return view
+    shared = {row['id']: row for row in snapshot.get('sources') or []
+              if isinstance(row, dict) and isinstance(row.get('id'), str)}
+
+    def compact(rows):
+        if not isinstance(rows, list):
+            return rows
+        return [row['id'] if isinstance(row, dict) and shared.get(row.get('id')) == row else row for row in rows]
+    view = dict(view)
+    view['sector_analysis'] = [{**sector, 'sources': compact(sector['sources'])}
+                               if isinstance(sector, dict) and 'sources' in sector else sector
+                               for sector in sectors]
+    view['source_refs'] = 'snapshot'
     return view
 
 
@@ -1032,6 +1064,10 @@ class AutoResearchEngine:
                                                     report.get('analysis', {}), report.get('strategy'),
                                                     references=report.get('candidate_references', []),
                                                     reference_catalog=report.get('snapshot', {}).get('funds', []))
+            if self.research_scope == 'sectors':
+                # Day-over-day evidence changes for watchlist alerts (never raises).
+                from research_changes import apply_changes
+                apply_changes(report, self.state_path)
             completed = now_iso()
             try:
                 self._persist(report, completed)
