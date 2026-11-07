@@ -15,7 +15,7 @@ WORKDIR /app
 COPY requirements.txt requirements-cloud.txt requirements-sms.txt ./
 RUN pip install --no-cache-dir -r requirements-cloud.txt
 # Explicit sources only; existing accounts, credentials and local reports stay out.
-COPY server.py cloud_server.py cloud_admin.py research_*.py ./
+COPY backend/ ./backend/
 # Both frontends ship; the new one is the default (see ENV above), legacy keeps dist/.
 COPY dist/ ./dist/
 COPY --from=web /web/dist-react/ ./web/dist-react/
@@ -25,4 +25,4 @@ RUN mkdir -p /app/data/cloud \
     && chown -R app:app /app/data
 USER app
 EXPOSE 8080
-CMD ["python", "-B", "-u", "cloud_server.py"]
+CMD ["python", "-B", "-u", "backend/cloud_server.py"]

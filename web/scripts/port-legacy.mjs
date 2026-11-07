@@ -61,21 +61,25 @@ function port(name) {
   return names.length;
 }
 
+// The old tests live in tests/legacy-frontend/ (helpers in its helpers/ folder)
+// and reach the old pages with ../../dist/ (helpers: ../../../dist/).
+const legacyTests = path.join(root, 'tests', 'legacy-frontend');
+
 function portTests() {
   const rewrite = (text, depth) => text
-    .replace(/require\((['"])\.{1,2}\/dist\/([\w-]+\.js)\1\)/g, (_, q, f) =>
+    .replace(/require\((['"])(?:\.\.?\/)+dist\/([\w-]+\.js)\1\)/g, (_, q, f) =>
       MODULES.includes(f) ? `require(${q}${depth}src/lib/legacy/${f}${q})` : _)
-    .replace(/require\((['"])\.\/test_helpers\/([\w-]+\.cjs)\1\)/g, "require($1./helpers/$2$1)")
-    .replace(/path\.join\(__dirname,\s*(['"])(\.\.\/)?dist\//g, (_, q, up) =>
-      `path.join(__dirname,${q}${up ? '../../../../' : '../../../'}dist/`);
+    .replace(/path\.join\(__dirname,\s*(['"])((?:\.\.\/)+)dist\//g, (_, q, ups) =>
+      // web/tests/legacy is one level deeper than tests/legacy-frontend.
+      `path.join(__dirname,${q}../${ups}dist/`);
   let count = 0;
-  for (const file of fs.readdirSync(root).filter(f => /^test_.*\.cjs$/.test(f))) {
-    const text = fs.readFileSync(path.join(root, file), 'utf8');
+  for (const file of fs.readdirSync(legacyTests).filter(f => /^test_.*\.cjs$/.test(f))) {
+    const text = fs.readFileSync(path.join(legacyTests, file), 'utf8');
     fs.writeFileSync(path.join(testDir, file), rewrite(text, '../../'));
     count += 1;
   }
-  for (const file of fs.readdirSync(path.join(root, 'test_helpers')).filter(f => f.endsWith('.cjs'))) {
-    const text = fs.readFileSync(path.join(root, 'test_helpers', file), 'utf8');
+  for (const file of fs.readdirSync(path.join(legacyTests, 'helpers')).filter(f => f.endsWith('.cjs'))) {
+    const text = fs.readFileSync(path.join(legacyTests, 'helpers', file), 'utf8');
     fs.writeFileSync(path.join(testDir, 'helpers', file), rewrite(text, '../../../'));
   }
   return count;
