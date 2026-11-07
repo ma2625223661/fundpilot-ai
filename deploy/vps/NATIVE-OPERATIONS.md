@@ -18,6 +18,24 @@
 | Caddy 配置 | `/etc/caddy/Caddyfile` |
 | 账号备份 | `/var/backups/fundpilot` |
 
+## 2026-11-07 目录调整后第一次更新（只需做一次）
+
+后端代码从项目根目录移到了 `backend/`。服务器上的 systemd 配置是安装时写入的，仍指向旧位置 `/opt/fundpilot/cloud_server.py`；只替换代码而不改这一行，网站会启动失败。更新这一版时：
+
+1. 先按下面"日常更新"第 1 步备份账号数据库。
+2. 上传新代码后，删除 `/opt/fundpilot` 根目录下旧的 `server.py`、`cloud_server.py`、`cloud_admin.py`、`launch.py` 和 `research_*.py`，避免新旧两份代码并存。
+3. 把服务的启动路径改到 `backend/`，再重启：
+
+   ```bash
+   sudo sed -i 's#/opt/fundpilot/cloud_server.py#/opt/fundpilot/backend/cloud_server.py#' /etc/systemd/system/fundpilot.service
+   sudo systemctl daemon-reload
+   sudo systemctl restart fundpilot
+   ```
+
+4. 按"日常更新"最后一步检查服务状态和健康检查。新安装的服务器不需要这一节，`install-native.sh` 已使用新路径。
+
+Docker / Railway 部署不需要手动操作：镜像的启动命令已改为 `backend/cloud_server.py`。
+
 ## 日常更新
 
 1. 更新前先备份账号数据库，并保留当前程序版本。涉及数据库结构变化时，先在备份副本上验证迁移。

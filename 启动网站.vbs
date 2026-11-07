@@ -9,4 +9,4 @@ shell.CurrentDirectory = folder
 Dim env
 Set env = shell.Environment("Process")
 If env("FUNDPILOT_FRONTEND") = "" Then env("FUNDPILOT_FRONTEND") = "react"
-shell.Run """" & folder & "\runtime\python.exe"" -B """ & folder & "\launch.py"" --reload --background", 0, False
+shell.Run """" & folder & "\runtime\python.exe"" -B """ & folder & "\backend\launch.py"" --reload --background", 0, False

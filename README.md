@@ -2,7 +2,7 @@
 
 默认启用账号密码登录。首次在运行后台的电脑上打开网站，请自行创建管理员账号和密码；之后必须登录才能访问研究页面、报告接口和个人数据。没有预设或通用密码。其他用户可注册自己的账号，关注列表与研究记录按账号分别保存。
 
-支持可配置的注册手机号验证、已有账号绑定和短信验证码登录。默认未启用短信，账号密码注册与登录继续可用；短信启用后默认要求新用户验证手机号。开通配置与接口见 [手机号验证说明](docs/phone-verification.md)。
+支持可配置的注册手机号验证、已有账号绑定和短信验证码登录。默认未启用短信，账号密码注册与登录继续可用；短信启用后默认要求新用户验证手机号。开通配置与接口见 [手机号验证说明](docs/部署运维/phone-verification.md)。
 
 管理员在本机仍可管理已有的 Windows 加密模型配置，已有市场报告与计划继续使用。手机通过同一局域网地址访问时也需要登录。云端入口与本机入口分开；本机登录保护不代表已经部署到公网。
 
@@ -12,7 +12,7 @@
 
 ## 启动与使用
 
-双击 `start.cmd`（或 `启动网站.vbs`），也可在本项目运行 `runtime\python.exe launch.py`。启动器会打开 `http://127.0.0.1:8765/index.html`；重复启动会识别并复用现有网站，与当前选择的 AI 服务商无关。服务运行时后台持续更新；关闭网页不会停止研究，服务退出或电脑关闭后停止。其他程序占用端口时保留原程序，可用 `start.cmd --port 8876` 另选端口。
+双击 `start.cmd`（或 `启动网站.vbs`），也可在本项目运行 `runtime\python.exe backend\launch.py`。启动器会打开 `http://127.0.0.1:8765/index.html`；重复启动会识别并复用现有网站，与当前选择的 AI 服务商无关。服务运行时后台持续更新；关闭网页不会停止研究，服务退出或电脑关闭后停止。其他程序占用端口时保留原程序，可用 `start.cmd --port 8876` 另选端口。
 
 **热更新**：`start.cmd` 默认带 `--reload` 启动。启动窗口作为看守进程，网站在子进程中运行；保存任何非测试 `.py` 文件后，后台约 2～5 秒内自动重启（新增或删除 dist 下的文件也会触发），无需重新双击。只修改 dist 下已有的网页、脚本或样式时不用重启，刷新浏览器即可。新代码有语法错误时窗口会显示文件和行号，修正保存后自动恢复。每次重启会重新做一次免费公开数据扫描，不会调用付费 AI。后台若超过 90 秒没有响应（主循环卡住），启动窗口会先打印各线程的调用位置（以 Timeout 开头），再自动重启后台。关闭启动窗口会同时停止网站；不需要热更新时可运行 `launch.py` 不带 `--reload`。
 
@@ -33,7 +33,7 @@
 - 板块对比：在板块页或详情中"加入对比"，最多 4 个并排比较分项、多周期涨跌、风险与样本指标走势（`#compare/...`）。
 - 变动提醒：后端把每份报告与上一交易日最后一份报告对比（`research_changes.py`，基线存于报告旁的 `sector-baselines.json`），关注卡片、侧边栏和顶栏铃铛显示研究分、档位、风险标记的变化。变动不代表收益方向。
 - Ctrl/Cmd+K 搜索板块、页面和设置；手机端有底部导航，可"添加到主屏幕"。
-- 开发与检查：在 `web/` 下运行 `npm test`、`npm run check:ui`、`npm run build`；界面规范见 `CLAUDE.md` / `AGENTS.md`，迁移与功能记录见 `docs/react-migration.md`。
+- 开发与检查：在 `web/` 下运行 `npm test`、`npm run check:ui`、`npm run build`；界面规范见 `CLAUDE.md` / `AGENTS.md`，迁移与功能记录见 `docs/开发记录/react-migration.md`。
 
 ## 运维与安全（2026-11-04）
 
@@ -66,6 +66,8 @@
 
 ## 后台与存储
 
+以下 Python 文件都在 `backend/` 目录；数据和缓存仍在项目根目录的 `data/`。
+
 - `research_sectors.py`：直接板块采集、分类映射、历史指标、研究指数与市场风险。
 - `research_sector_ai.py`：逐板块 AI 理由、风险、复核条件、证据约束与真实用量。
 - `research_auto.py`：板块模式调度，跳过全部基金研究和分类流程。
@@ -82,11 +84,11 @@
 
 板块详情分别展示有效数据、明确指标映射与评分模型状态。部分样本取数成功不代表全部板块完整。债券使用独立 `bond_trend_v1` 模型，至少61个近期历史点才评分，规则和得分分项可在详情展开；不受股票市场恐慌上限约束。债券回撤至少5%且20日跌幅至少2%时提示趋势特大风险，非信用违约判断；趋势星号需完整历史、债券分至少75且5日、20日、20日均线差均为正。规则未经交易回测，不能解读为收益概率、到期收益率或已测量的久期。
 
-`python -m unittest -q test_research_sectors test_research_sector_ai test_sector_engine test_sector_server test_research_schedule test_research_schedule_window test_auto_status_performance`
+`runtime\python.exe -B tests\run_backend.py test_research_sectors test_research_sector_ai test_sector_engine test_sector_server test_research_schedule test_research_schedule_window test_auto_status_performance`
 
-`node --test test_sector_frontend.cjs`
+`node --test tests/legacy-frontend/test_sector_frontend.cjs`
 
-后端测试请用项目自带的运行环境执行，它已安装 `requirements.txt` 中的依赖（如解析中证、国证官方成分 XLS 的 `xlrd`）：`runtime\python.exe -B -m unittest discover -p "test_*.py"`（全量约 4 分钟）。系统自带的 `python` 没装这些依赖时，成分股归属相关的测试（`test_sector_member_additions`、`test_research_public_data`、`test_research_theme_memberships`）会因 `No module named 'xlrd'` 失败，这不是代码问题；要用系统 Python，先运行 `python -m pip install -r requirements.txt`。
+后端测试请用项目自带的运行环境执行，它已安装 `requirements.txt` 中的依赖（如解析中证、国证官方成分 XLS 的 `xlrd`）：`runtime\python.exe -B tests\run_backend.py`（全量约 4 分钟；后面加测试模块名可只跑指定的几个）。旧版网页的测试：`node --test "tests/legacy-frontend/*.cjs"`。系统自带的 `python` 没装这些依赖时，成分股归属相关的测试（`test_sector_member_additions`、`test_research_public_data`、`test_research_theme_memberships`）会因 `No module named 'xlrd'` 失败，这不是代码问题；要用系统 Python，先运行 `python -m pip install -r requirements.txt`。
 
 测试使用模拟来源和合成密钥，不调用真实付费接口。另通过本地服务真实报告和浏览器页面检查，确认范围为 `sectors`，没有基金、净值或持仓来源。
 
@@ -98,7 +100,7 @@
 
 详情展示独立点位、样本名单与权重、回溯走势，并可展开“龙头走势、业绩支撑、重要事件、大盘风险、综合研究分数”查看日期、公式及来源。消息评分仍仅用公开公告/官方政策，按A股交易日09:20和14:50计划运行；普通更新不额外强制付费调用。债券保留独立债券模型，不使用股票样本指标。
 
-验证：`python -m unittest test_research_leader_index`；`node --test test_leader_index_frontend.cjs test_sector_frontend.cjs test_event_frontend.cjs`。
+验证：`runtime\python.exe -B tests\run_backend.py test_research_leader_index`；`node --test tests/legacy-frontend/test_leader_index_frontend.cjs tests/legacy-frontend/test_sector_frontend.cjs tests/legacy-frontend/test_event_frontend.cjs`。
 
 ## 手机访问
 
@@ -115,4 +117,4 @@
 - BaoStock连接检查改为行业、日线、财务三项独立受限进程，各自验证真实样本、日期和接口返回；一项超时不阻止其他两项核验。小样本连通性成功不代表所有板块数据完整。未登录错误仅重新连接复查一次，不通过修改显示状态掩盖失败。
 - 海外缓存独立保存并限制4MB，SEC只保存财务计算与溯源所需字段，避免原始大文件让国内缓存重启后无法读取。官方完整成分另存最后成功解析的工作簿快照，校验身份、名单日期与文件摘要；源站失败时保留本次错误及原日期。
 - 官方完整成分不可取得时，可沿用先前报告中已核验官方归属的固定公司样本，单独保存为有限样本池，最长按原名单日期核验45天。页面明确未取得本轮完整名单、不作本轮全成分市值排名。固定样本、完整成分与公开业务证据分别标注；备用归属不能替代对当前报价、财务与共同历史的独立核验。
-- 公司综合研究分数、仅参考指数走势分数、债券/转债专用分数和资金利率分数分别标注范围；缺少公司证据时不把参考走势分包装为公司综合分。样本与生产核验结果见 `docs/company-sample-pools-20261031.md`，复核入口 `work/verify_audit_live.py`。
+- 公司综合研究分数、仅参考指数走势分数、债券/转债专用分数和资金利率分数分别标注范围；缺少公司证据时不把参考走势分包装为公司综合分。样本与生产核验结果见 `docs/研究方法/company-sample-pools-20261031.md`，复核入口 `work/verify_audit_live.py`。
