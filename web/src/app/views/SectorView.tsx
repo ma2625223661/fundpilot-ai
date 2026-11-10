@@ -11,6 +11,7 @@ import { useResearch } from '@/app/research/ResearchContext';
 import { WatchButton } from '@/app/research/WatchButton';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { CompareButton } from '@/app/research/Compare';
+import { RelatedSectors } from '@/app/research/RelatedSectors';
 import { sectorResearch } from '@/lib/research';
 import { finite } from '@/lib/format';
 import type { Sector } from '@/lib/report';
@@ -114,6 +115,7 @@ export function SectorView() {
       </nav>
       {/* A new sector remounts the detail, so its tabs start again at the overview. */}
       <SectorDetail key={sector.id} report={report} sectorId={sector.id} />
+      <RelatedSectors report={report} sector={sector} />
     </div>
   );
 }

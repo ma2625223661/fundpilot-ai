@@ -51,3 +51,21 @@ describe('leading sample column', () => {
     expect(container.textContent).toContain('2 涨 · 1 跌 / 3 家');
   });
 });
+
+describe('related sectors on the sector page', () => {
+  it('lists other sectors of the same category as links, never itself or another category', async () => {
+    location.hash = sectorHref('semiconductor');
+    const value = report([
+      sector(),
+      sector({ id: 'chips', title: '存储芯片', score: 58.2, change_pct: -1.5, quote: { change_pct: -1.5 } }),
+      sector({ id: 'csi300', title: '沪深300', group: 'broad', score: 61 }),
+    ]);
+    renderPage(<SectorView />, { replies: baseReplies({}, value) });
+    const section = await screen.findByRole('region', { name: '同类板块：行业主题' });
+    const links = [...section.querySelectorAll('a')];
+    expect(links.map(link => link.getAttribute('href'))).toEqual(['#sector/chips']);
+    expect(section.textContent).toContain('不构成投资建议');
+    const change = [...section.querySelectorAll('span')].find(node => node.textContent === '-1.50%');
+    expect(change?.className).toContain('text-fall');
+  });
+});
