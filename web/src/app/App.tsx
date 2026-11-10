@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { AppShell } from '@/app/AppShell';
 import { useView, type ViewId } from '@/app/navigation';
 import { DashView } from '@/app/views/DashView';
@@ -35,10 +36,14 @@ function PageSkeleton() {
 
 function CurrentView({ view }: { view: ViewId }) {
   const Page = PAGES[view];
+  // A failing page (or a page file replaced by a newer build) shows a reload
+  // notice instead of blanking the site; opening another page clears it.
   return (
-    <Suspense fallback={<PageSkeleton />}>
-      <Page />
-    </Suspense>
+    <ErrorBoundary resetKey={view}>
+      <Suspense fallback={<PageSkeleton />}>
+        <Page />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
