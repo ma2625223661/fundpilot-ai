@@ -21,6 +21,7 @@ import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { sectorHref } from '@/app/navigation';
 import { CompareButton } from '@/app/research/Compare';
+import { WatchButton } from '@/app/research/WatchButton';
 import { SubscriptionProfile } from '@/app/research/SubscriptionProfile';
 import { Watchlist } from '@/app/research/Watchlist';
 import type { Sector } from '@/lib/report';
@@ -238,6 +239,7 @@ export function DashView() {
               <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
               {board.current && (
                 <span className="flex items-center gap-1">
+                  <WatchButton id={board.current} />
                   <CompareButton id={board.current} />
                   <a
                     href={sectorHref(board.current)}

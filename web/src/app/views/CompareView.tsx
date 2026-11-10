@@ -12,6 +12,7 @@ import { DatedLines } from '@/components/charts-lazy';
 import { compareHref, goTo, sectorHref, useHashCompare } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
 import { leadSample } from '@/app/research/BoardExplorer';
+import { WatchButton } from '@/app/research/WatchButton';
 import { PERIODS, periodChange, periodEnd } from '@/app/research/period';
 import { sectorResearch } from '@/lib/research';
 import { DIRECTION_CLASS, direction, finite, num, pct, stamp } from '@/lib/format';
@@ -152,6 +153,7 @@ export function CompareView() {
                           <a href={sectorHref(s.id)} className="font-semibold text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
                             {s.title}
                           </a>
+                          <WatchButton id={s.id} title={s.title} compact />
                           {sectors.length > 2 && (
                             <a
                               href={compareHref(sectors.filter(x => x.id !== s.id).map(x => x.id))}
