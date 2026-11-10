@@ -74,14 +74,42 @@ class ChangeTests(unittest.TestCase):
         self.assertNotIn('new', result['items'])
 
 
+class HistoryTests(unittest.TestCase):
+    def test_one_score_per_trading_day_ending_with_the_current_report(self):
+        rows = [changes.snapshot(report('2026-11-05T15:00:00+08:00', sector(score=40), sector('bond', score=None))),
+                changes.snapshot(report('2026-11-06T15:00:00+08:00', sector(score=42))),
+                changes.snapshot(report('2026-11-07T15:00:00+08:00', sector(score=43))),
+                changes.snapshot(report('2026-11-09T09:30:00+08:00', sector(score=44)))]
+        now = report('2026-11-09T15:00:00+08:00', sector(score=45.5), sector('bond', score=52))
+        with patch.object(changes, '_trading_day', lambda day: day != '2026-11-07'):
+            history = changes.changes(now, rows)['history']
+        self.assertEqual(history['dates'], ['2026-11-05', '2026-11-06', '2026-11-09'])
+        self.assertEqual(history['scores']['semi'], [40, 42, 45.5])
+        # Missing that day, or no score: None, never 0.
+        self.assertEqual(history['scores']['bond'], [None, None, 52])
+
+    def test_history_is_present_without_a_baseline_and_capped(self):
+        with ALWAYS_OPEN:
+            self.assertEqual(changes.changes(report('2026-11-05T10:00:00+08:00', sector(score=50)), [])['history'],
+                             {'dates': ['2026-11-05'], 'scores': {'semi': [50]}})
+            rows = [changes.snapshot(report(f'2026-10-{d:02d}T15:00:00+08:00', sector(score=d))) for d in range(1, 32)]
+            history = changes.changes(report('2026-11-05T10:00:00+08:00', sector(score=50)), rows)['history']
+        self.assertEqual(len(history['dates']), changes.KEEP_DAYS)
+        self.assertEqual(history['dates'][-2:], ['2026-10-31', '2026-11-05'])
+        self.assertEqual(changes.changes(report(None, sector()), [])['history'], {'dates': [], 'scores': {}})
+
+
 class BaselineTests(unittest.TestCase):
-    def test_one_snapshot_per_date_and_at_most_five_dates(self):
+    def test_one_snapshot_per_date_and_at_most_keep_days_dates(self):
         rows = []
         for day in range(1, 9):
             for hour in ('10', '15'):
                 rows = changes.remember(rows, changes.snapshot(report(f'2026-11-0{day}T{hour}:00:00+08:00', sector(score=day))))
-        self.assertEqual([row['date'] for row in rows], [f'2026-11-0{d}' for d in range(4, 9)])
+        self.assertEqual([row['date'] for row in rows], [f'2026-11-0{d}' for d in range(1, 9)])
         self.assertTrue(rows[-1]['as_of'].startswith('2026-11-08T15'))
+        with patch.object(changes, 'KEEP_DAYS', 5):
+            rows = changes.remember(rows, changes.snapshot(report('2026-11-09T15:00:00+08:00', sector())))
+        self.assertEqual([row['date'] for row in rows], [f'2026-11-0{d}' for d in range(5, 10)])
 
     def test_a_weekend_report_is_skipped_when_a_trading_day_exists(self):
         rows = [changes.snapshot(report('2026-11-06T15:00:00+08:00', sector(score=40))),

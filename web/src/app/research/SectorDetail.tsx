@@ -16,6 +16,7 @@ import { AiAnalysis } from '@/app/research/sector-detail/AiAnalysis';
 import { Diagnostics, ResearchDimensions } from '@/app/research/sector-detail/Evidence';
 import { IndependentIndex } from '@/app/research/sector-detail/IndependentIndex';
 import { ScoreSummary } from '@/app/research/sector-detail/ScoreSummary';
+import { ScoreTrendLine } from '@/app/research/sector-detail/ScoreTrendLine';
 import { Section, type Row } from '@/app/research/sector-detail/parts';
 
 // Same wording as componentLabel() in the old sector-research.js (not exported there).
@@ -90,6 +91,7 @@ export function SectorDetail({ report, sectorId, framed = true }: { report: Repo
             <strong className={cn('text-3xl font-semibold tabular-nums', TONE_TEXT[tone])}>{data.scoreText}</strong>
             <span className="text-xs text-muted-foreground">{scoreLabel}</span>
             <span className="text-xs text-muted-foreground tabular-nums">数据时间 {stamp(sector.as_of)}</span>
+            <ScoreTrendLine report={report} sectorId={sector.id} />
           </div>
         </div>
         {historical && (

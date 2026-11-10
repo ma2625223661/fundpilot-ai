@@ -21,6 +21,8 @@ export interface SectorChanges {
   reason: string;
   note: string;
   items: Record<string, SectorChange>;
+  /** Research score per trading day (oldest first, ending with this report); null where unknown. */
+  history: { dates: string[]; scores: Record<string, (number | null)[]> };
 }
 
 const number = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
@@ -54,7 +56,42 @@ export function normalizeChanges(value: unknown): SectorChanges {
     reason: text(input.reason) || (status === 'unavailable' ? '本报告没有变动记录。' : ''),
     note: text(input.note) || '变动只描述研究证据的变化，不代表收益方向，不构成投资建议。',
     items,
+    history: normalizeHistory(input.history),
   };
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Keeps the history only when every row lines up with the dates; otherwise drops it whole. */
+function normalizeHistory(value: unknown): SectorChanges['history'] {
+  const input = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const dates = Array.isArray(input.dates) && input.dates.every(day => typeof day === 'string' && DAY.test(day)) ? (input.dates as string[]) : [];
+  const scores: Record<string, (number | null)[]> = {};
+  const raw = dates.length && input.scores && typeof input.scores === 'object' ? (input.scores as Record<string, unknown>) : {};
+  for (const [id, row] of Object.entries(raw)) {
+    if (Array.isArray(row) && row.length === dates.length) scores[id] = row.map(number);
+  }
+  return { dates, scores };
+}
+
+export interface ScoreTrend {
+  points: { date: string; value: number | null }[];
+  /** First and last dates that have a score. */
+  from: string;
+  to: string;
+  /** Number of trading days with a score. */
+  known: number;
+}
+
+/** A sector's research-score history, or null when fewer than two days have a score. */
+export function scoreTrend(report: Report | null, id: string): ScoreTrend | null {
+  const history = (report?.sector_changes as SectorChanges | undefined)?.history;
+  const values = history?.scores[id];
+  if (!history || !values) return null;
+  const points = history.dates.map((date, index) => ({ date, value: values[index] }));
+  const known = points.filter(point => point.value !== null);
+  if (known.length < 2) return null;
+  return { points, from: known[0].date, to: known[known.length - 1].date, known: known.length };
 }
 
 /** The change record for one sector, or null when there is nothing comparable. */

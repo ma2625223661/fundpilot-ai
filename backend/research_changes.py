@@ -19,7 +19,8 @@ from pathlib import Path
 from research_data import CHINA
 
 VERSION = 1
-KEEP_DAYS = 5
+# Dates kept in the baseline file; also the reach of the score history.
+KEEP_DAYS = 30
 # A score move at least this large is worth an alert on its own.
 NOTABLE_SCORE_DELTA = 3.0
 MAX_FILE_BYTES = 2_000_000
@@ -91,10 +92,32 @@ def baseline_for(baselines, day):
     return max(pool, key=lambda row: row['date']) if pool else None
 
 
+def score_history(baselines, current):
+    """Research score per sector on each earlier trading day plus the current report.
+
+    One value per date (the last report of that day); a sector missing or without
+    a score that day gets None, never a filled-in number.
+    """
+    if not current:
+        return {'dates': [], 'scores': {}}
+    rows = sorted((row for row in baselines if isinstance(row, dict) and isinstance(row.get('date'), str)
+                   and row['date'] < current['date'] and isinstance(row.get('sectors'), dict)
+                   and _trading_day(row['date'])), key=lambda row: row['date'])
+    rows = rows[-(KEEP_DAYS - 1):] + [current]
+
+    def score(row, sector_id):
+        value = row['sectors'].get(sector_id)
+        return _number(value.get('score')) if isinstance(value, dict) else None
+
+    return {'dates': [row['date'] for row in rows],
+            'scores': {sector_id: [score(row, sector_id) for row in rows] for sector_id in current['sectors']}}
+
+
 def changes(report, baselines):
     """Per-sector differences against the baseline; values are copied, deltas computed here."""
     current = snapshot(report)
-    empty = {'version': VERSION, 'baseline_as_of': None, 'baseline_date': None, 'items': {}, 'note': NOTE}
+    empty = {'version': VERSION, 'baseline_as_of': None, 'baseline_date': None, 'items': {}, 'note': NOTE,
+             'history': score_history(baselines, current)}
     if not current:
         return {**empty, 'status': 'unavailable', 'reason': '报告时间缺失，无法对比。'}
     base = baseline_for(baselines, current['date'])
