@@ -22,7 +22,8 @@ export function AiSettings({ canManage }: { canManage: boolean }) {
   const cloud = session.access.scope === 'cloud';
   const { shown, edit, reset } = useAiForm(config);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('保存计划不会立即调用研究模型。');
+  // Empty until something happens: the line above the buttons already says saving never calls the model.
+  const [status, setStatus] = useState('');
   const keyInput = useRef<HTMLInputElement>(null);
   const locked = !canManage || busy;
 

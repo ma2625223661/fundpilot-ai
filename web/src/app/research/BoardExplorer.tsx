@@ -3,7 +3,7 @@
 // The table, phone cards, guide, export and filter state live in ./board/.
 import { Diamond, Download, Search, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
@@ -53,18 +53,18 @@ export function BoardExplorer({ board, onOpenDetail }: { board: BoardView; onOpe
   return (
     <Card id="boardExplorer">
       <CardHeader>
-        <CardTitle>
+        {/* Actions in the title row rather than CardAction: on a phone they wrap below
+            the title instead of squeezing the summary into a narrow column. */}
+        <CardTitle className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="text-lg font-semibold text-balance">板块机会总览</h2>
-        </CardTitle>
-        <CardAction>
-          <div className="flex flex-wrap justify-end gap-2">
+          <span className="ml-auto flex flex-wrap gap-2">
             <Button variant="outline" size="sm" disabled={!visible.length} onClick={() => exportSectors(report, visible)}>
               <Download aria-hidden="true" />
               导出 CSV
             </Button>
             <ScoreGuide report={report} sort={sort} families={families} scarcity={scarcityAllowed} />
-          </div>
-        </CardAction>
+          </span>
+        </CardTitle>
         <CardDescription className="tabular-nums text-pretty">
           共 {sectors.length} 个方向 · 公司完整分 {company.filter(s => s.score_status === 'complete').length} 个 · 公司基础/阶段分{' '}
           {company.filter(s => s.score_status !== 'complete').length} 个 · 其他指标{' '}

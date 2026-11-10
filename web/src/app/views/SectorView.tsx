@@ -2,15 +2,16 @@
 // with room to read and an address to bookmark or share. Previous / next follow
 // the default order of the sector table (old sortSectors by score group).
 import { useEffect } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Link2, Star, StarOff } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { goTo, sectorHref, useHashSector } from '@/app/navigation';
 import { useResearch } from '@/app/research/ResearchContext';
-import { useWatchlist } from '@/app/research/WatchlistContext';
+import { WatchButton } from '@/app/research/WatchButton';
 import { SectorDetail } from '@/app/research/SectorDetail';
 import { CompareButton } from '@/app/research/Compare';
+import { RelatedSectors } from '@/app/research/RelatedSectors';
 import { sectorResearch } from '@/lib/research';
 import { finite } from '@/lib/format';
 import type { Sector } from '@/lib/report';
@@ -23,18 +24,6 @@ async function copyLink() {
   } catch {
     toast.error('无法写入剪贴板，请直接复制浏览器地址栏中的链接');
   }
-}
-
-function WatchButton({ id }: { id: string }) {
-  const watch = useWatchlist();
-  if (!watch.available || !watch.loaded) return null;
-  const followed = watch.items.includes(id);
-  return (
-    <Button variant="outline" size="sm" disabled={watch.busy} onClick={() => void watch.change(id, followed ? 'remove' : 'add')}>
-      {followed ? <StarOff aria-hidden="true" /> : <Star aria-hidden="true" />}
-      {followed ? '取消关注' : '加入关注'}
-    </Button>
-  );
 }
 
 export function SectorView() {
@@ -126,6 +115,7 @@ export function SectorView() {
       </nav>
       {/* A new sector remounts the detail, so its tabs start again at the overview. */}
       <SectorDetail key={sector.id} report={report} sectorId={sector.id} />
+      <RelatedSectors report={report} sector={sector} />
     </div>
   );
 }

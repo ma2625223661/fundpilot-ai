@@ -267,7 +267,8 @@ function ReviewCard({ item, onOpen }: { item: Row; onOpen: (id: string) => void 
     value: Number.isFinite(s.value) ? s.value : null,
   }));
   return (
-    <article className="flex flex-col gap-3 rounded-lg border border-border p-3">
+    // A lone card (one followed sector, or one picked) takes the full width instead of half.
+    <article className="flex flex-col gap-3 rounded-lg border border-border p-3 lg:only:col-span-2">
       {head}
       <Guidance value={item.guidance} />
       <Evidence item={item} />

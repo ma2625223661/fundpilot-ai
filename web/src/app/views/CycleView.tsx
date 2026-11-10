@@ -1,7 +1,7 @@
 // Port of dist/research-cycle.js: the subscriber long-wave (Kondratieff) research
 // framework. Evidence coverage measures data completeness, not opportunity odds.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, Circle, Dot, RefreshCw } from 'lucide-react';
+import { ArrowRight, Check, Circle, CircleDashed, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -280,8 +280,18 @@ function Themes({ data, onOpen }: { data: Row; onOpen: (id: string) => boolean }
                 <div className="flex flex-wrap gap-1">
                   {item.checks.map((check: Row, index: number) => (
                     <Badge key={index} variant={check.state === 'met' ? 'secondary' : 'outline'}>
-                      {check.state === 'met' ? <Check aria-hidden="true" /> : check.state === 'unmet' ? <Circle aria-hidden="true" /> : <Dot aria-hidden="true" />}
+                      {/* Met / not met / not yet assessed; the state is also written out for screen readers. */}
+                      {check.state === 'met' ? (
+                        <Check aria-hidden="true" />
+                      ) : check.state === 'unmet' ? (
+                        <Circle aria-hidden="true" />
+                      ) : (
+                        <CircleDashed aria-hidden="true" />
+                      )}
                       {check.label}
+                      <span className="sr-only">
+                        {check.state === 'met' ? '（已满足）' : check.state === 'unmet' ? '（未满足）' : '（待评估）'}
+                      </span>
                     </Badge>
                   ))}
                 </div>

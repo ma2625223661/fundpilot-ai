@@ -1,6 +1,9 @@
 // Port of eventCard / eventList / renderEvents. Impact scores carry their sign
 // in the text; scores are compared, never read as probabilities.
+import { useState } from 'react';
 import { Info } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useWatchlist } from '@/app/research/WatchlistContext';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -88,10 +91,31 @@ export function EventList({ events, emptyText }: { events: ResearchEvent[]; empt
   );
 }
 
+type EventFilter = 'all' | 'positive' | 'negative' | 'watched';
+
+/** Which events a filter keeps: by the event's own direction, or by a followed sector. */
+function filterEvents(events: ResearchEvent[], filter: EventFilter, watched: Set<string>) {
+  if (filter === 'positive' || filter === 'negative') return events.filter(event => event.direction === filter);
+  if (filter === 'watched') return events.filter(event => event.sector_ids.some((id: string) => watched.has(id)));
+  return events;
+}
+
 export function ImportantEvents() {
   const { report, config, state, session } = useResearch();
+  const watch = useWatchlist();
+  const [filter, setFilter] = useState<EventFilter>('all');
   const analysis = report?.event_analysis || sectorResearch.normalizeEvents(null);
-  const events: ResearchEvent[] = analysis.events;
+  const allEvents: ResearchEvent[] = analysis.events;
+  const watched = new Set(watch.available ? watch.items : []);
+  const filters: [EventFilter, string, boolean][] = [
+    ['all', '全部', true],
+    ['positive', '利好', true],
+    ['negative', '利空', true],
+    ['watched', '我的关注', watch.available],
+  ];
+  // A filter that is no longer offered (watchlist unavailable) falls back to all.
+  const active = filters.some(([id, , shown]) => id === filter && shown) ? filter : 'all';
+  const events = filterEvents(allEvents, active, watched);
   const schedule = sectorResearch.eventScheduleText(config?.schedule || state.ai_schedule);
   const status = report?.report_stale || ['stale', 'expired'].includes(analysis.status)
     ? '正在展示历史事件评估，请按发布时间和报告时间复核。'
@@ -105,7 +129,7 @@ export function ImportantEvents() {
             ? '事件研究等待下一次交易日时段，当前不补造事件影响分。'
             : analysis.summary ||
               `仅保留影响分绝对值 ≥ ${analysis.threshold} 的事件；利好为正分，利空为负分，双向影响单独标注。影响分不是涨跌概率。`;
-  const notConfigured = !report?.report_stale && analysis.status === 'not_configured' && !events.length;
+  const notConfigured = !report?.report_stale && analysis.status === 'not_configured' && !allEvents.length;
   return (
     <Card id="importantEvents">
       <CardHeader>
@@ -117,7 +141,7 @@ export function ImportantEvents() {
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="tabular-nums">
-            {events.length} 项中等及以上事件
+            {allEvents.length} 项中等及以上事件
           </Badge>
           <span className="text-xs text-muted-foreground">
             颜色按 A 股习惯：利好为红色正分，利空为绿色负分。
@@ -148,14 +172,46 @@ export function ImportantEvents() {
             {analysis.summary && analysis.summary !== status && (
               <p className="text-sm text-muted-foreground text-pretty">{analysis.summary}</p>
             )}
-            <EventList
-              events={events}
-              emptyText={
-                analysis.status === 'completed'
-                  ? '本轮没有达到中等影响标准的事件。'
-                  : '暂无完成评估的重要事件；待按计划采集可靠公告、政策及公司证据后更新。'
-              }
-            />
+            {allEvents.length > 0 && (
+              <ToggleGroup
+                variant="outline"
+                size="sm"
+                aria-label="筛选重要事件"
+                value={[active]}
+                onValueChange={value => value[0] && setFilter(value[0] as EventFilter)}
+              >
+                {filters
+                  .filter(([, , shown]) => shown)
+                  .map(([id, label]) => (
+                    <ToggleGroupItem key={id} value={id} className="px-2.5 tabular-nums">
+                      {label} {filterEvents(allEvents, id, watched).length}
+                    </ToggleGroupItem>
+                  ))}
+              </ToggleGroup>
+            )}
+            {allEvents.length > 0 && !events.length ? (
+              <div className="flex flex-wrap items-center gap-3 py-2">
+                <p className="text-sm text-muted-foreground text-pretty">
+                  {active === 'watched'
+                    ? watched.size
+                      ? '本轮没有涉及你关注板块的重要事件。'
+                      : '你还没有关注板块，在"我的关注与订阅"添加后，这里会只显示相关事件。'
+                    : `本轮没有${DIRECTION[active]}事件。`}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => setFilter('all')}>
+                  显示全部事件
+                </Button>
+              </div>
+            ) : (
+              <EventList
+                events={events}
+                emptyText={
+                  analysis.status === 'completed'
+                    ? '本轮没有达到中等影响标准的事件。'
+                    : '暂无完成评估的重要事件；待按计划采集可靠公告、政策及公司证据后更新。'
+                }
+              />
+            )}
           </>
         )}
         <p className="text-xs text-muted-foreground tabular-nums">

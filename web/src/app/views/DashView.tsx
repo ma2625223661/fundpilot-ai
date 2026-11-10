@@ -21,6 +21,7 @@ import { SectorDetail } from '@/app/research/SectorDetail';
 import { useSubscription } from '@/app/research/SubscriptionContext';
 import { sectorHref } from '@/app/navigation';
 import { CompareButton } from '@/app/research/Compare';
+import { WatchButton } from '@/app/research/WatchButton';
 import { SubscriptionProfile } from '@/app/research/SubscriptionProfile';
 import { Watchlist } from '@/app/research/Watchlist';
 import type { Sector } from '@/lib/report';
@@ -234,10 +235,12 @@ export function DashView() {
       {report && (
         <Sheet open={detailOpen && Boolean(detailSector)} onOpenChange={setDetailOpen}>
           <SheetContent side="right" size="wide" className="gap-0 p-0">
-            <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border pr-12">
-              <SheetTitle className="text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
+            {/* On a phone the actions wrap under the title instead of squeezing it to one character a line. */}
+            <SheetHeader className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border pr-12">
+              <SheetTitle className="shrink-0 text-sm font-medium text-muted-foreground">板块详情</SheetTitle>
               {board.current && (
-                <span className="flex items-center gap-1">
+                <span className="flex flex-wrap items-center gap-1">
+                  <WatchButton id={board.current} />
                   <CompareButton id={board.current} />
                   <a
                     href={sectorHref(board.current)}
