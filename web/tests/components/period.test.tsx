@@ -53,3 +53,21 @@ describe('heat map periods', () => {
     expect(tile('半导体').className).toContain('bg-fall/');
   });
 });
+
+describe('heat map colour by research tier', () => {
+  beforeEach(() => localStorage.removeItem('fundpilot_heatmap_mode_v1'));
+
+  it('colours tiles by the tier from the old colour function and keeps the choice', async () => {
+    render();
+    await screen.findByText('板块热力图');
+    fireEvent.click(screen.getByRole('button', { name: '研究档位' }));
+    const semiconductor = tile('半导体');
+    expect(semiconductor.getAttribute('aria-label')).toContain('研究分 52，中性');
+    expect(semiconductor.className).toContain('bg-tier-neutral/20');
+    expect(semiconductor.className).not.toContain('bg-rise/');
+    // The period switch belongs to the change colours only.
+    expect(screen.queryByRole('button', { name: '20 日' })).toBeNull();
+    expect(screen.getByText(/颜色表示研究档位/).textContent).toContain('不构成投资建议');
+    expect(localStorage.getItem('fundpilot_heatmap_mode_v1')).toBe('tier');
+  });
+});
