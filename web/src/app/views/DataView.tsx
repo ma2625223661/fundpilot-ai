@@ -123,7 +123,7 @@ export function DataView() {
           </p>
           <p className="text-sm text-pretty tabular-nums">
             {issues.length
-              ? '异常与不完整记录：' + issues.map(([key, count]) => ISSUES[key] + ' ' + count + ' 条').join('；') + '。下方展开“查看说明与获取时间”可核对原始原因。'
+              ? '异常与不完整记录：' + issues.map(([key, count]) => ISSUES[key] + ' ' + count + ' 条').join('；') + '。下方展开“查看说明”可核对原始原因。'
               : '本次来源记录没有未取得、过时或部分获取的记录。'}
           </p>
           <p className="text-xs text-muted-foreground text-pretty">
@@ -171,7 +171,7 @@ export function DataView() {
             {records.slice(0, pageSize).map((s, index) => (
               <article
                 key={s.id + index}
-                className={cn('flex flex-col gap-1 rounded-lg border border-l-4 border-border bg-card p-3', STATE_BORDER[sectorResearch.sourceRecordState(s)])}
+                className={cn('flex flex-col gap-1 rounded-lg border border-l-4 border-border bg-card px-3 py-2', STATE_BORDER[sectorResearch.sourceRecordState(s)])}
               >
                 <div className="grid items-center gap-x-4 gap-y-1 sm:grid-cols-12">
                   <div className="min-w-0 sm:col-span-7">
@@ -179,15 +179,19 @@ export function DataView() {
                       {s.name || s.id || '数据源'}
                     </SourceLink>
                   </div>
-                  <small className="text-xs text-muted-foreground tabular-nums sm:col-span-3">数据日期 {s.as_of ? stamp(s.as_of) : '未提供'}</small>
+                  {/* Data date and fetch time are different things, so each keeps its own label. */}
+                  <span className="flex flex-col text-xs text-muted-foreground tabular-nums sm:col-span-3">
+                    <span>数据日期 {s.as_of ? stamp(s.as_of) : '未提供'}</span>
+                    {s.fetched_at && <span>获取时间 {stamp(s.fetched_at)}</span>}
+                  </span>
                   <span className="sm:col-span-2 sm:text-right">
                     <Badge variant={sectorResearch.sourceRecordState(s) === 'attention' ? 'destructive' : 'outline'}>{STATUS[s.status] || '待确认'}</Badge>
                   </span>
                 </div>
-                {(s.error || s.fetched_at) && (
-                  <Disclosure title={s.error ? '查看说明与获取时间' : '查看获取时间'}>
-                    {s.error && <p className="text-pretty">{s.error}</p>}
-                    {s.fetched_at && <small className="tabular-nums">获取时间：{stamp(s.fetched_at)}</small>}
+                {/* Only records with an explanation to read keep a collapsible. */}
+                {s.error && (
+                  <Disclosure title="查看说明">
+                    <p className="text-pretty">{s.error}</p>
                   </Disclosure>
                 )}
               </article>

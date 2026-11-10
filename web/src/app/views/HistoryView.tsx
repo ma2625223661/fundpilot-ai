@@ -23,6 +23,16 @@ import { FiveDayReview } from '@/app/research/FiveDayReview';
 import { useResearch, type HistoryEntry } from '@/app/research/ResearchContext';
 import { stamp } from '@/lib/format';
 
+/** Saved reports grouped by Beijing date, newest day first, keeping their order. */
+function groupByDay(entries: HistoryEntry[]): [string, HistoryEntry[]][] {
+  const days = new Map<string, HistoryEntry[]>();
+  for (const entry of entries) {
+    const day = stamp(entry.as_of).split(' ')[0] || '日期未知';
+    days.set(day, [...(days.get(day) ?? []), entry]);
+  }
+  return [...days];
+}
+
 export function HistoryView() {
   const { histories, historyStatus, openHistory, clearHistory, accountMode, session } = useResearch();
   const [opening, setOpening] = useState('');
@@ -95,28 +105,36 @@ export function HistoryView() {
             {historyStatus || defaultStatus}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {histories.map((entry, index) => (
-            <Button
-              key={entry.as_of}
-              variant="outline"
-              disabled={opening === entry.as_of}
-              className="h-auto justify-start gap-4 p-3 text-left whitespace-normal"
-              onClick={() => void open(entry)}
-            >
-              <span className="flex w-28 shrink-0 flex-col">
-                <strong className="text-base font-semibold tabular-nums">{stamp(entry.as_of).split(' ')[0]}</strong>
-                <span className="text-xs text-muted-foreground tabular-nums">{stamp(entry.as_of).split(' ')[1] || ''}</span>
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  {entry.cloud_record ? entry.sector_count : entry.sector_analysis.length} 个板块
-                  {index === 0 && <Badge variant="secondary">最近一份</Badge>}
-                </span>
-                <span className="line-clamp-2 text-xs font-normal text-muted-foreground text-pretty">{entry.summary || '板块行情与风险报告'}</span>
-              </span>
-              <span className="shrink-0 text-xs font-normal text-primary">回看</span>
-            </Button>
+        <CardContent className="flex flex-col gap-4">
+          {/* Grouped by day: several reports a day otherwise repeat the same date row after row. */}
+          {groupByDay(histories).map(([day, entries]) => (
+            <section key={day} aria-label={day + ' 的研究报告'} className="flex flex-col gap-1.5">
+              <h3 className="text-sm font-semibold tabular-nums">
+                {day}
+                <span className="ml-2 font-normal text-muted-foreground">{entries.length} 份</span>
+              </h3>
+              {entries.map(entry => (
+                <Button
+                  key={entry.as_of}
+                  variant="outline"
+                  disabled={opening === entry.as_of}
+                  className="h-auto justify-start gap-4 px-3 py-2 text-left whitespace-normal"
+                  onClick={() => void open(entry)}
+                >
+                  <span className="w-16 shrink-0 text-sm font-semibold tabular-nums">{stamp(entry.as_of).split(' ')[1] || '—'}</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium tabular-nums">
+                      {entry.cloud_record ? entry.sector_count : entry.sector_analysis.length} 个板块
+                      {entry === histories[0] && <Badge variant="secondary">最近一份</Badge>}
+                    </span>
+                    {entry.summary && (
+                      <span className="line-clamp-2 text-xs font-normal text-muted-foreground text-pretty">{entry.summary}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs font-normal text-primary">回看</span>
+                </Button>
+              ))}
+            </section>
           ))}
           {!histories.length && (
             <div className="flex flex-col items-start gap-2 py-4">
