@@ -224,7 +224,7 @@ function LiquidityCard({ report }: { report: Report }) {
         </p>
         <p className="tabular-nums">{s.sample_count} 个观测点</p>
         {s.missing.length > 0 && <p className="text-pretty">缺失或限制：{s.missing.join('；')}</p>}
-        <p className="text-pretty">{s.method || '沿用人民币隔夜Shibor专用流动性模型；分数越高表示资金利率相对平稳或趋宽。'}</p>
+        <p className="text-pretty">{s.method || '沿用人民币隔夜 Shibor 专用流动性模型；分数越高表示资金利率相对平稳或趋宽。'}</p>
         <p className="text-pretty">{s.scope || '仅观察人民币隔夜资金利率，不代表股票收益或存款安全。'}</p>
         <Sources ids={s.source_ids} known={known} />
       </Details>

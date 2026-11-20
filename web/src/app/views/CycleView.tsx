@@ -366,9 +366,8 @@ export function CycleView() {
   return (
     <>
       <PageHeader
-        eyebrow="康波周期"
-        title="长期机会观察"
-        description="把宏观环境、产业方向与公司证据放在一起，了解机会成立的条件，也看清风险与数据缺口。"
+        title="康波周期"
+        description="长期机会观察：把宏观环境、产业方向与公司证据放在一起，了解机会成立的条件，也看清风险与数据缺口。"
         actions={
           <div className="flex items-center gap-2">
             <span role="status" className="text-xs text-muted-foreground">
@@ -448,12 +447,12 @@ export function CycleView() {
             </p>
             <p className="text-pretty">{data.method}</p>
             <p className="text-pretty">
-              情景规则：以新订单PMI的50分界与隔夜Shibor近20个有效发布日变化交叉观察；−5至+5基点之间（不含边界）保持中间情景。阈值为本站初始研究设计，未经策略回测。两项短期数据不足以验证几十年的周期。
+              情景规则：以新订单 PMI 的 50 分界与隔夜 Shibor 近 20 个有效发布日变化交叉观察；−5 至 +5 基点之间（不含边界）保持中间情景。阈值为本站初始研究设计，未经策略回测。两项短期数据不足以验证几十年的周期。
             </p>
             <p className="text-pretty">
               板块沿用基本面0–40、走势0–30、事件催化−30至+30的既有评分。只有完整评分进入研究档位；阶段分不能直接解释为“乐观看待”。环境风险独立显示，分数越高风险越大。公司样本不代表整个行业；估值、杠杆、现金流与主题收入需要额外核验。
             </p>
-            <p className="text-pretty">本页复用已有公开数据，不生成新的付费AI解读。板块AI解读沿用原订阅规则，解锁前显示实际所需点数。</p>
+            <p className="text-pretty">本页复用已有公开数据，不生成新的付费 AI 解读。板块 AI 解读沿用原订阅规则，解锁前显示实际所需点数。</p>
             {data.references.map((ref: Row, index: number) => (
               <p key={index} className="text-pretty">
                 {ref.url ? <SourceLink url={ref.url}>{ref.title}</SourceLink> : <b className="font-medium text-foreground">{ref.title}</b>}

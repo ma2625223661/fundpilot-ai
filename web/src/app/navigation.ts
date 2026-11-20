@@ -16,7 +16,8 @@ export const VIEWS: ViewEntry[] = [
   { id: 'data', label: '数据依据', icon: Database },
   { id: 'history', label: '研究记录', icon: History },
   { id: 'cycle', label: '康波周期', icon: Waves },
-  { id: 'settings', label: '模型与数据设置', icon: Settings },
+  // Plain "设置": the page is read-only for anyone who may not manage it (LAN, members).
+  { id: 'settings', label: '设置', icon: Settings },
 ];
 
 // Old links point at sections inside the settings page (for example #mobileAccess).

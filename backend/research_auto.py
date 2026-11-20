@@ -40,7 +40,9 @@ AUTO_PREFS = {'risk': '积极成长', 'pos': 20, 'min': 72}
 SCAN_INTERVAL = 30 * 60
 RETRY_INTERVAL = 5 * 60
 REPORT_VERSION = 1
-MAX_REPORT_BYTES = 24_000_000
+# A complete sector report with every company sample can pass 24 MB; 64 MB keeps
+# room while still refusing a runaway file (issue #5).
+MAX_REPORT_BYTES = 64_000_000
 DEEP_LIMIT = 96
 SOURCE_CONNECTIONS = [{
     'id': 'yangjibao', 'label': '养基宝', 'status': 'unavailable',
@@ -561,6 +563,19 @@ def run_auto_research(progress=None, previous=None, refresh=False):
                           'runs_while_server_online': True, 'trade_execution': False}}
 
 
+def usable_sector_count(report):
+    """Sectors that carry any market data (a change or a score); 0 means an empty round."""
+    def finite(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and value == value and abs(value) != float('inf')
+    rows = report.get('sector_analysis') if isinstance(report, dict) else None
+    return sum(1 for row in rows or [] if isinstance(row, dict)
+               and (finite(row.get('change_pct')) or finite(row.get('score'))))
+
+
+class EmptyReport(Exception):
+    """Every data source failed: publishing would replace a valid report with an empty one."""
+
+
 def client_report_view(report, *, compact_sources=False):
     """Browser payload: drop what the page never reads.
 
@@ -971,6 +986,11 @@ class AutoResearchEngine:
             if self.research_scope == 'sectors' and (report.get('research_scope') != 'sectors'
                                                      or not isinstance(report.get('sector_analysis'), list)):
                 raise ValueError('板块研究器返回了不兼容的报告')
+            if self.research_scope == 'sectors' and not usable_sector_count(report):
+                with self._lock:
+                    kept = usable_sector_count(self._state.get('report'))
+                if kept:
+                    raise EmptyReport()
             revision = self._revision(config)
             def is_current():
                 latest = self._configuration()
@@ -1071,12 +1091,21 @@ class AutoResearchEngine:
             completed = now_iso()
             try:
                 self._persist(report, completed)
-            except OSError:
-                report['snapshot']['warnings'].append('本地报告保存失败；当前结果仍可查看，下轮自动重试。')
+            except OSError as error:
+                # Say why and what it means, and leave a line in the log for the owner.
+                print(f'[{now_iso()}] 板块报告未能保存到磁盘：{error}（上限 {MAX_REPORT_BYTES // 1_000_000} MB）', flush=True)
+                report['snapshot'].setdefault('warnings', []).append(
+                    f'本轮报告未能保存到磁盘（{error}）；当前结果仍可查看，但重启后会回到上一份已保存的报告，下轮自动重试。')
             with self._lock:
                 self._state.update(status='ready', stage='自动研究完成', report=report, completed_at=completed,
                                    error=None, restored=False,
                                    next_run_at=(datetime.now(CHINA) + timedelta(seconds=self.interval)).isoformat(timespec='seconds'))
+        except EmptyReport:
+            print(f'[{now_iso()}] 本轮未取得任何板块行情或评分，保留上一份有效报告。', flush=True)
+            with self._lock:
+                self._state.update(status='error', stage='本轮未取得有效数据，保留上一份报告',
+                                   error='本轮所有数据源都没有返回有效的板块行情或评分；为避免空报告覆盖，'
+                                         '继续显示上一份有效报告，系统将在 5 分钟后自动重试。')
         except Exception:
             with self._lock:
                 self._state.update(status='error', stage='本轮研究失败，等待自动重试',

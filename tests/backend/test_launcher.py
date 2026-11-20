@@ -1,6 +1,7 @@
 """Startup regressions; local HTTP fixtures only, no data or model requests."""
 import importlib.util
 import io
+import os
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -112,7 +113,8 @@ class LauncherTests(unittest.TestCase):
                 patch('sys.stdout', new_callable=io.StringIO):
             self.assertEqual(launch.main(['--port', str(self.port), '--no-browser']), 0)
         self.assertEqual(probe.call_count, 2)
-        create.assert_called_once_with(self.port)
+        # Local-only is the default since issue #5.
+        create.assert_called_once_with(self.port, local_only=True)
 
     def test_other_occupied_port_is_reported_and_left_running(self):
         self.health({'ok': True, 'service': 'unrelated'})
@@ -137,7 +139,8 @@ class LauncherTests(unittest.TestCase):
                 patch.object(launch, 'running_service', return_value=False), \
                 patch('sys.stdout', new_callable=io.StringIO):
             self.assertEqual(launch.main(['--port', str(self.port), '--no-browser']), 0)
-        create.assert_called_once_with(self.port)
+        # Local-only is the default since issue #5.
+        create.assert_called_once_with(self.port, local_only=True)
         service.auto_engine.start.assert_called_once_with()
         service.auto_engine.close.assert_called_once_with()
         service.server_close.assert_called_once_with()
@@ -385,6 +388,22 @@ class OperationsTests(unittest.TestCase):
         with patch.object(launch.subprocess, 'Popen') as popen, patch.object(launch, 'ROOT', self.root):
             launch.spawn_backend(8765, local_only=True)
         self.assertIn('--local-only', popen.call_args.args[0])
+
+    def test_lan_access_is_opt_in_and_warns_about_plain_http(self):
+        for argv, env in ((['--allow-lan'], {}), ([], {'FUNDPILOT_ALLOW_LAN': '1'})):
+            service = Mock(); service.serve_forever.side_effect = KeyboardInterrupt
+            create = Mock(return_value=service)
+            with patch.dict(sys.modules, {'server': SimpleNamespace(create_server=create)}),                     patch.dict(os.environ, env),                     patch.object(launch, 'running_service', return_value=False), patch('sys.stdout', new_callable=io.StringIO) as out:
+                launch.main(['--port', '8765', '--no-browser', *argv])
+            create.assert_called_once_with(8765)
+            self.assertIn('未加密的 HTTP', out.getvalue())
+        # Without the opt-in the site stays on this computer and says how to open it up.
+        service = Mock(); service.serve_forever.side_effect = KeyboardInterrupt
+        create = Mock(return_value=service)
+        with patch.dict(sys.modules, {'server': SimpleNamespace(create_server=create)}),                 patch.object(launch, 'running_service', return_value=False), patch('sys.stdout', new_callable=io.StringIO) as out:
+            launch.main(['--port', '8765', '--no-browser'])
+        create.assert_called_once_with(8765, local_only=True)
+        self.assertIn('--allow-lan', out.getvalue())
 
     def test_local_only_server_refuses_lan_hosts(self):
         import server

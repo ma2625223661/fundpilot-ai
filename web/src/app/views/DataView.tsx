@@ -70,8 +70,7 @@ export function DataView() {
 
   const header = (
     <PageHeader
-      eyebrow="数据依据"
-      title="数据与依据"
+      title="数据依据"
       description="先看采集状态，再核对数据日期，最后追溯原始来源。"
       actions={
         canRefresh && (

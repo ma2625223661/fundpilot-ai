@@ -39,16 +39,15 @@ export function AiServiceApp() {
       </header>
       <main className="grid items-start gap-6 lg:grid-cols-3">
         <section aria-labelledby="serviceTitle" className="flex flex-col gap-5 lg:col-span-2">
-          <span className="text-xs text-muted-foreground">AI 自动化研究</span>
           <h1 id="serviceTitle" className="text-3xl font-semibold text-balance">
-            让 AI 持续整理证据，把研究看得更清楚。
+            AI 研究订阅说明
           </h1>
           <p className="text-muted-foreground text-pretty">
             订阅后由管理员为账号开通 AI 研究服务与额度，无需自行填写 API Key。自动整理板块走势、业绩证据与重要事件，查看支持理由、风险和需要继续观察的变化。
           </p>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">AI日常研究 · 常规证据更新</Badge>
-            <Badge variant="secondary">AI深度研究 · 深入分析与复核</Badge>
+            <Badge variant="secondary">AI 日常研究 · 常规证据更新</Badge>
+            <Badge variant="secondary">AI 深度研究 · 深入分析与复核</Badge>
           </div>
           <div className="grid gap-3 sm:grid-cols-2" aria-label="AI 自动化研究作用">
             {FEATURES.map(([title, copy], index) => (

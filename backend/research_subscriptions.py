@@ -8,9 +8,14 @@ import json
 import math
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from research_accounts import AccountError
+
+# Personal AI calls are limited per Beijing calendar day and month.
+BEIJING = timezone(timedelta(hours=8))
+MAX_DAILY_CALLS = 1000
+MAX_MONTHLY_CALLS = 30000
 
 
 CREDIT_COSTS = {'medium': 1, 'xhigh': 1.5}
@@ -59,6 +64,34 @@ def interpretation_price(sector):
     effort = effort if isinstance(effort, str) and effort in CREDIT_COSTS else None
     return {'cost': CREDIT_COSTS.get(effort, 1), 'reasoning_effort': effort,
             'pricing_legacy': effort is None}
+
+
+def call_period(clock_value):
+    """Beijing calendar day and month for a timestamp, as 'YYYY-MM-DD' and 'YYYY-MM'."""
+    moment = datetime.fromtimestamp(clock_value, BEIJING)
+    return moment.strftime('%Y-%m-%d'), moment.strftime('%Y-%m')
+
+
+def _limit(value, maximum, label):
+    if type(value) is not int or not 0 <= value <= maximum:
+        raise AccountError(f'{label}需为 0～{maximum} 的整数')
+    return value
+
+
+def quota_message(quota):
+    """Why a personal AI call cannot start, naming both remaining counts; '' when it can."""
+    if quota.get('unlimited'):
+        return ''
+    if not quota.get('configured'):
+        return '管理员尚未设置你的每日和每月 AI 调用次数，未发起请求，也未扣减次数'
+    remaining = f"今日剩余 {quota['daily_remaining']} 次，本月剩余 {quota['monthly_remaining']} 次"
+    if quota['daily_remaining'] <= 0 and quota['monthly_remaining'] <= 0:
+        return f'今日和本月的 AI 调用次数都已用完（{remaining}），未发起请求'
+    if quota['monthly_remaining'] <= 0:
+        return f'本月 AI 调用次数已用完（{remaining}），下月 1 日北京时间 0 点恢复，未发起请求'
+    if quota['daily_remaining'] <= 0:
+        return f'今日 AI 调用次数已用完（{remaining}），北京时间次日 0 点恢复，未发起请求'
+    return ''
 
 
 def iso(value):
@@ -111,6 +144,14 @@ class SubscriptionStore:
                 created REAL NOT NULL, updated REAL NOT NULL, result TEXT NOT NULL DEFAULT '{}',
                 error TEXT NOT NULL DEFAULT '');
               CREATE INDEX IF NOT EXISTS ai_manual_user ON ai_manual_jobs(user_id,status,updated);
+              CREATE TABLE IF NOT EXISTS ai_call_limits (
+                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                daily_limit INTEGER NOT NULL CHECK(daily_limit>=0),
+                monthly_limit INTEGER NOT NULL CHECK(monthly_limit>=0), updated REAL NOT NULL);
+              CREATE TABLE IF NOT EXISTS ai_call_usage (
+                job_id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                day TEXT NOT NULL, month TEXT NOT NULL, created REAL NOT NULL);
+              CREATE INDEX IF NOT EXISTS ai_call_usage_user ON ai_call_usage(user_id,month,day);
               CREATE TABLE IF NOT EXISTS ai_manual_narratives (
                 report_id TEXT NOT NULL, sector_id TEXT NOT NULL, reasoning_effort TEXT NOT NULL,
                 configuration TEXT NOT NULL, narrative TEXT NOT NULL, updated REAL NOT NULL,
@@ -139,9 +180,11 @@ class SubscriptionStore:
         personal = {'preferred_reasoning_effort':preference[0] if preference else None,
                     'credits_reserved':_points(held[0]), 'manual_research_revision':held[1]}
         if user['role'] == 'admin':
+            personal['call_quota'] = self._call_quota(db, user_id, 'admin')
             return {'status':'admin', 'label':'管理员', 'can_unlock':True,
                     'credits_remaining':None, 'expires_at':None, 'unlocked_count':0,
                     'credit_unit':'点', 'credit_costs':dict(CREDIT_COSTS), **personal}
+        personal['call_quota'] = self._call_quota(db, user_id, user['role'])
         row = db.execute('SELECT * FROM ai_subscriptions WHERE user_id=?', (user_id,)).fetchone()
         status = ('unsubscribed' if not row else 'paused' if not row['enabled'] or user['disabled']
                   else 'expired' if row['expires'] <= self.accounts.clock()
@@ -152,6 +195,38 @@ class SubscriptionStore:
             'credit_unit':'点', 'credit_costs':dict(CREDIT_COSTS), **personal,
             'expires_at':iso(row['expires']) if row else None,
             'unlocked_count':db.execute('SELECT count(*) FROM ai_unlocks WHERE user_id=?', (user_id,)).fetchone()[0]}
+
+    def _call_quota(self, db, user_id, role):
+        """Today's and this month's personal AI calls against the administrator's limits.
+
+        Counts come from ai_call_usage, which records only completed calls that
+        actually asked the model; failures and reused interpretations never count.
+        Changing a limit applies at once and never rewrites the recorded usage.
+        """
+        day, month = call_period(self.accounts.clock())
+        daily_used = db.execute('SELECT count(*) FROM ai_call_usage WHERE user_id=? AND day=?', (user_id, day)).fetchone()[0]
+        monthly_used = db.execute('SELECT count(*) FROM ai_call_usage WHERE user_id=? AND month=?', (user_id, month)).fetchone()[0]
+        base = {'day':day, 'month':month, 'daily_used':daily_used, 'monthly_used':monthly_used, 'timezone':'Asia/Shanghai'}
+        if role == 'admin':
+            return {**base, 'unlimited':True, 'configured':True, 'daily_limit':None, 'monthly_limit':None,
+                    'daily_remaining':None, 'monthly_remaining':None, 'can_call':True}
+        row = db.execute('SELECT daily_limit,monthly_limit FROM ai_call_limits WHERE user_id=?', (user_id,)).fetchone()
+        if not row:
+            return {**base, 'unlimited':False, 'configured':False, 'daily_limit':None, 'monthly_limit':None,
+                    'daily_remaining':0, 'monthly_remaining':0, 'can_call':False}
+        daily_remaining = max(0, row['daily_limit'] - daily_used)
+        monthly_remaining = max(0, row['monthly_limit'] - monthly_used)
+        return {**base, 'unlimited':False, 'configured':True, 'daily_limit':row['daily_limit'],
+                'monthly_limit':row['monthly_limit'], 'daily_remaining':daily_remaining,
+                'monthly_remaining':monthly_remaining, 'can_call':daily_remaining > 0 and monthly_remaining > 0}
+
+    def record_call(self, db, user_id, job_id):
+        """Count one completed model call, inside the caller's settlement transaction."""
+        now = self.accounts.clock()
+        day, month = call_period(now)
+        db.execute('INSERT OR IGNORE INTO ai_call_usage VALUES (?,?,?,?,?)', (job_id, user_id, day, month, now))
+        # Monthly limits need only the current month; keep about 13 months for the audit.
+        db.execute('DELETE FROM ai_call_usage WHERE created<?', (now - 400 * 86400,))
 
     def summary(self, user_id):
         with self.accounts.connection() as db:
@@ -198,11 +273,14 @@ class SubscriptionStore:
         return [{**dict(row), 'delta':_points(row['delta']), 'balance':_points(row['balance']),
                  'credit_unit':'点', 'created_at':iso(row['created'])} for row in rows]
 
-    def manage(self, actor_id, user_id, action, request_id, credits=0, days=0, note=''):
+    def manage(self, actor_id, user_id, action, request_id, credits=0, days=0, note='',
+               daily_limit=None, monthly_limit=None):
         if (not isinstance(request_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,80}', request_id)
-                or action not in ('grant', 'pause', 'resume') or not isinstance(user_id, str)
+                or action not in ('grant', 'pause', 'resume', 'limits') or not isinstance(user_id, str)
                 or not isinstance(note, str) or len(note) > 200):
             raise AccountError('订阅操作参数无效')
+        if action == 'limits':
+            return self._set_limits(actor_id, user_id, request_id, daily_limit, monthly_limit, note)
         grant_units = _grant_half_units(credits)
         if type(days) is not int or not 0 <= days <= 3660:
             raise AccountError('有效期需为 0～3660 天的整数')
@@ -243,6 +321,37 @@ class SubscriptionStore:
             db.execute('INSERT INTO ai_subscription_ledger VALUES (?,?,?,?,?,?,?,?,?,?)',
                 (secrets.token_hex(16), user_id, actor_id, action, grant_units if action == 'grant' else 0,
                  balance, expires, note, now, request_id))
+            return self._summary(db, user_id)
+
+    def _set_limits(self, actor_id, user_id, request_id, daily_limit, monthly_limit, note):
+        daily = _limit(daily_limit, MAX_DAILY_CALLS, '每日调用次数')
+        monthly = _limit(monthly_limit, MAX_MONTHLY_CALLS, '每月调用总次数')
+        if monthly < daily:
+            raise AccountError('每月调用总次数不能少于每日调用次数')
+        now = self.accounts.clock()
+        with self.accounts.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            actor = db.execute('SELECT role,disabled FROM users WHERE id=?', (actor_id,)).fetchone()
+            if not actor or actor['role'] != 'admin' or actor['disabled']:
+                raise AccountError('仅管理员可设置调用次数', 403)
+            target = db.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+            if not target or target['role'] != 'member':
+                raise AccountError('请选择普通用户账号', 404)
+            previous = db.execute('SELECT user_id FROM ai_subscription_ledger WHERE actor_id=? AND request_id=?',
+                                  (actor_id, request_id)).fetchone()
+            if previous:
+                if previous['user_id'] != user_id:
+                    raise AccountError('操作编号已使用，请刷新后重新操作', 409)
+                return self._summary(db, user_id)
+            db.execute('INSERT INTO ai_call_limits VALUES (?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET '
+                       'daily_limit=excluded.daily_limit,monthly_limit=excluded.monthly_limit,updated=excluded.updated',
+                       (user_id, daily, monthly, now))
+            row = db.execute('SELECT credits,expires FROM ai_subscriptions WHERE user_id=?', (user_id,)).fetchone()
+            balance, expires = (row['credits'], row['expires']) if row else (0, 0)
+            # The audit trail records the change; credits and expiry are untouched.
+            db.execute('INSERT INTO ai_subscription_ledger VALUES (?,?,?,?,?,?,?,?,?,?)',
+                (secrets.token_hex(16), user_id, actor_id, 'limits', 0, balance, expires,
+                 (note + '；' if note else '') + f'每日 {daily} 次 · 每月 {monthly} 次', now, request_id))
             return self._summary(db, user_id)
 
     def unlock(self, user_id, report, sector_id, expected_content):

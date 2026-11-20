@@ -121,7 +121,9 @@ class AIConfigStoreTests(unittest.TestCase):
         self.assertFalse(status['effective_enabled'])
         self.assertFalse(self.store.snapshot()['enabled'])
         self.assertEqual(status['verification'], 'unverified')
-        self.assertEqual(status['key_hint'], '••••7f93')
+        # No fragment of the key either: the hint is a fixed label.
+        self.assertEqual(status['key_hint'], '密钥（内容不显示）')
+        self.assertNotIn(KEY[-4:], json.dumps(status))
         self.assertNotIn(KEY, json.dumps(status))
         self.assertNotIn(KEY.encode(), self.path.read_bytes())
         self.assertNotIn('key', json.loads(self.path.read_text(encoding='utf-8')))

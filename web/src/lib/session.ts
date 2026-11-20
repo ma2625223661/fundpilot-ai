@@ -23,6 +23,8 @@ export interface Access {
   lan_urls: string[];
   site_url?: string;
   preview?: boolean;
+  /** The site only accepts this computer (the default since issue #5); phones need --allow-lan. */
+  local_only?: boolean;
 }
 
 export interface Session {

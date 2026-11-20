@@ -33,7 +33,7 @@ export function ScoreGuide({ report, sort, families, scarcity }: { report: Repor
           {scarcity && (
             <div>
               <dt className="font-medium">稀缺性标注</dt>
-              <dd className="text-muted-foreground text-pretty">依据近期公告标注具体环节；点开查看原文、AI推理与疑点。稀缺标签不加分。</dd>
+              <dd className="text-muted-foreground text-pretty">依据近期公告标注具体环节；点开查看原文、AI 推理与疑点。稀缺标签不加分。</dd>
             </div>
           )}
         </dl>

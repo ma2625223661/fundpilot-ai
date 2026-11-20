@@ -80,5 +80,22 @@ describe('settings page', () => {
     const field = within(card).getByLabelText('手机访问网址（局域网）') as HTMLInputElement;
     expect(field.value).toBe(`http://192.168.1.8:${port}/index.html`);
     expect(card.textContent).not.toContain('8.8.8.8');
+    // LAN access is allowed here, so the card warns that the connection is unencrypted.
+    expect(card.textContent).toContain('局域网连接未加密');
+  });
+
+  it('explains the local-only default and how to allow phones (issue #5)', async () => {
+    renderPage(<SettingsView />, {
+      session: session({
+        user: null,
+        cloud: false,
+        isAdmin: true,
+        access: { scope: 'same_network', can_manage_settings: true, lan_urls: [], local_only: true },
+      }),
+    });
+    const card = (await screen.findByText('手机访问网址')).closest('[id="mobileAccess"]') as HTMLElement;
+    expect(card.textContent).toContain('当前为仅本机访问（默认）');
+    expect(card.textContent).toContain('start.cmd --allow-lan');
+    expect(card.textContent).toContain('未加密的 HTTP');
   });
 });

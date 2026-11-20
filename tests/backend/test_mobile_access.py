@@ -45,7 +45,7 @@ class MobileAccessTests(unittest.TestCase):
         with patch('server.lan_addresses', return_value=['10.0.0.5']):
             status, value = self.get()
         self.assertEqual(status, 200)
-        self.assertEqual(value, {'can_manage_settings': True, 'scope': 'same_network',
+        self.assertEqual(value, {'can_manage_settings': True, 'scope': 'same_network', 'local_only': False,
             'lan_urls': [f'http://10.0.0.5:{self.service.server_port}/index.html']})
 
     def test_lan_can_read_entry_but_cannot_mutate_ai_or_data(self):

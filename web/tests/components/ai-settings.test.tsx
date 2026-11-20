@@ -62,7 +62,7 @@ describe('AI settings form', () => {
     fireEvent.change(field, { target: { value: '' } });
     fireEvent.blur(field);
     fireEvent.click(screen.getByRole('button', { name: /保存研究设置/ }));
-    await waitFor(() => expect(screen.getByText('请输入1至10000的每日请求上限。')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('请输入 1 至 10000 的每日请求上限。')).toBeTruthy());
     expect(requests().some(item => item.path === '/api/ai/config' && item.body)).toBe(false);
   });
 });

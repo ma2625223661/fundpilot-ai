@@ -71,7 +71,7 @@ export function VerificationDetail({ value }: { value: Raw }) {
       )}
       {v.inference && (
         <>
-          <small>AI推断</small>
+          <small>AI 推断</small>
           <p className="text-pretty">{v.inference}</p>
         </>
       )}
@@ -166,9 +166,9 @@ export function ScarcityDetail({ value, showMetrics = true }: { value: Raw; show
         ))}
       </div>
       <small>
-        AI分析 {p.reviewed_at || '时间待核验'} · 原文有效期至 {p.review_due_at}
+        AI 分析 {p.reviewed_at || '时间待核验'} · 原文有效期至 {p.review_due_at}
       </small>
-      <small>订阅附带 · 稀缺标签不加分；查看不调用AI、不另扣点。</small>
+      <small>订阅附带 · 稀缺标签不加分；查看不调用 AI、不另扣点。</small>
     </Disclosure>
   );
 }

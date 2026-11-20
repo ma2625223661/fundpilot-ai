@@ -17,7 +17,7 @@ from research_ai_cost import CHINA
 
 
 MAX_RECORDS = 40
-MAX_REPORT_BYTES = 24_000_000
+MAX_REPORT_BYTES = 64_000_000  # same limit as research_auto
 MAX_COMPRESSED_BYTES = 24_000_000
 IMPORT_ERROR = '历史AI用量核验失败，已暂停新调用。'
 _FIELDS = ('prompt_tokens', 'completion_tokens', 'total_tokens')

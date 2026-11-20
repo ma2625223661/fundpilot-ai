@@ -297,7 +297,7 @@ export function ResearchProvider({ session, children }: { session: Session; chil
   const clearHistory = useCallback(async () => {
     commitHistories([]);
     const saved = await saveHistory();
-    if (saved) toast.success('板块研究记录已清空');
+    if (saved) toast.success('研究记录已清空');
     return saved;
   }, [commitHistories, saveHistory]);
 

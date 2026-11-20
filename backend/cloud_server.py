@@ -516,11 +516,12 @@ class CloudHandler(Handler):
             if user['role'] != 'admin':
                 raise AccountError('此操作仅限管理员，个人关注和记录不受影响', 403)
             if path == '/api/admin/ai-subscription':
-                if set(value) - {'user_id', 'action', 'request_id', 'credits', 'days', 'note'}:
+                if set(value) - {'user_id', 'action', 'request_id', 'credits', 'days', 'note', 'daily_limit', 'monthly_limit'}:
                     raise AccountError('订阅操作参数无效')
                 subscriptions = self.server.accounts.subscriptions
                 result = subscriptions.manage(user['id'], value.get('user_id'), value.get('action'),
-                    value.get('request_id'), value.get('credits', 0), value.get('days', 0), value.get('note', ''))
+                    value.get('request_id'), value.get('credits', 0), value.get('days', 0), value.get('note', ''),
+                    value.get('daily_limit'), value.get('monthly_limit'))
                 return self.reply(200, {'subscription':result, 'items':subscriptions.ledger(value['user_id'])})
             if path == '/api/admin/create-admin':
                 if set(value) != {'username', 'password'}:

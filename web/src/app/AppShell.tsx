@@ -3,7 +3,7 @@
 // search, Ctrl+K), grouped navigation with count badges, secondary links and the
 // account card pinned to the bottom. A quote-centre style watchlist fills the
 // middle with each followed sector's score and change.
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Clock, ExternalLink, LifeBuoy } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -255,7 +255,6 @@ function SideFooter({ session, current }: { session: Session; current: ViewId })
 }
 
 // Short names for the phone tab bar; the sidebar keeps the full ones.
-const TAB_LABELS: Partial<Record<ViewId, string>> = { dash: '研究', data: '数据', history: '记录', cycle: '周期', settings: '设置' };
 
 /**
  * Phones get the main pages as a bottom tab bar (as in Xueqiu or East Money),
@@ -283,7 +282,7 @@ function MobileTabBar({ current }: { current: ViewId }) {
               onClick={() => goTo(view.id)}
             >
               <view.icon className="size-5" aria-hidden="true" />
-              <span aria-hidden="true">{TAB_LABELS[view.id] ?? view.label}</span>
+              <span aria-hidden="true">{view.label}</span>
             </Button>
           );
         })}
@@ -295,6 +294,13 @@ function MobileTabBar({ current }: { current: ViewId }) {
 export function AppShell({ session, view, children }: { session: Session; view: ViewId; children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const tray = useCompareList().length > 0 && view !== 'compare';
+  // The browser tab carries the same name as the sidebar ("名称 · FundPilot AI").
+  // A sector page names its own tab after the sector.
+  useEffect(() => {
+    if (view === 'sector') return;
+    const name = view === 'compare' ? '板块对比' : (VIEWS.find(entry => entry.id === view)?.label ?? '板块研究');
+    document.title = `${name} · FundPilot AI`;
+  }, [view]);
   return (
     <SidebarProvider style={{ '--sidebar-width': '17rem' } as CSSProperties}>
       {/* First stop for keyboard users: skip the sidebar and header. A button, not

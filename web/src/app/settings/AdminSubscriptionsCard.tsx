@@ -12,6 +12,8 @@ import { NumberField } from '@/components/number-field';
 import { Disclosure } from '@/components/research/common';
 import { subscriptions } from '@/lib/research';
 import { PasswordInput, api, type Row } from '@/app/settings/account-shared';
+import { CallLimitsForm } from '@/app/settings/CallLimitsForm';
+import { readQuota } from '@/lib/quota';
 
 function ResetPasswordForm({ user, onDone, onCancel }: { user: Row; onDone: (message: string) => void; onCancel: () => void }) {
   const [next, setNext] = useState('');
@@ -57,6 +59,13 @@ function ResetPasswordForm({ user, onDone, onCancel }: { user: Row; onDone: (mes
   );
 }
 
+/** "AI 调用：今日 1/5 次 · 本月 12/100 次", or that no limits are set. */
+function limitsLine(user: Row) {
+  const quota = readQuota(user.ai_subscription?.call_quota);
+  if (!quota?.configured) return 'AI 调用次数未设置，不能自行发起';
+  return `AI 调用：今日 ${quota.dailyUsed}/${quota.dailyLimit} 次 · 本月 ${quota.monthlyUsed}/${quota.monthlyLimit} 次`;
+}
+
 export function AdminSubscriptionsCard() {
   const [users, setUsers] = useState<Row[]>([]);
   const [feedback, setFeedback] = useState('');
@@ -97,7 +106,7 @@ export function AdminSubscriptionsCard() {
     try {
       await api('/api/admin/ai-subscription', { ...body, request_id: pending.current.request_id });
       pending.current = null;
-      setFeedback('订阅设置已保存。');
+      setFeedback(body.action === 'limits' ? 'AI 调用次数已保存，立即生效。' : '订阅设置已保存。');
       await load();
     } catch (error) {
       setFeedback((error as Error).message);
@@ -146,7 +155,9 @@ export function AdminSubscriptionsCard() {
           <h2 className="text-lg font-semibold">用户订阅与额度</h2>
           <Badge variant="outline">管理员控制</Badge>
         </CardTitle>
-        <CardDescription className="text-pretty">为用户开通研究额度（点）与有效期。中度每份 1 点，极高每份 1.5 点；增加额度、续期或暂停均会记录。</CardDescription>
+        <CardDescription className="text-pretty">
+          为用户开通研究额度（点）与有效期，并设置每天和每月可自行发起 AI 研究的次数。中度每份 1 点，极高每份 1.5 点；增加额度、续期、暂停和调整次数均会记录。用户只看到剩余次数，看不到服务商密钥。
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Disclosure title="管理管理员账号（最多 2 个）">
@@ -227,6 +238,7 @@ export function AdminSubscriptionsCard() {
             <FieldDescription>续订从尚未到期的截止时间继续延长；已到期则从现在开始。填写 0 表示该项不增加。</FieldDescription>
           </FieldGroup>
         </form>
+        <CallLimitsForm user={members.find(u => String(u.id) === selected)} busy={busy} onSave={body => void mutate(body)} />
         <p role="status" className="text-sm text-pretty">
           {feedback}
         </p>
@@ -244,6 +256,9 @@ export function AdminSubscriptionsCard() {
                     <small className="text-xs text-muted-foreground tabular-nums">
                       {user.role === 'admin' ? '统一管理服务商凭证与全站计划' : '余额 ' + summary.credits + ' 点 · 已解锁 ' + summary.count + ' 份'}
                     </small>
+                    {user.role === 'member' && (
+                      <small className="text-xs text-muted-foreground tabular-nums">{limitsLine(user)}</small>
+                    )}
                     <small className="text-xs text-muted-foreground tabular-nums">创建于 {created}</small>
                     <small className="text-xs text-muted-foreground">{user.password_status || '密码状态未知'}</small>
                   </div>

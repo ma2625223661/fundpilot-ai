@@ -6,6 +6,7 @@ import { useResearch } from '@/app/research/ResearchContext';
 import { creditText, jobBusy, useSubscription } from '@/app/research/SubscriptionContext';
 import { subscriptions } from '@/lib/research';
 import type { Report, Sector } from '@/lib/report';
+import { quotaBlock, quotaText, readQuota } from '@/lib/quota';
 
 // Same wording as `labels` in the old ai-subscription.js (not exported there).
 export const STATUS_LABELS: Record<string, string> = {
@@ -42,8 +43,12 @@ export function ResearchControl({ sector, report, onOpen }: { sector: Sector; re
   const legacyViewable = viewable && !detailed;
   const reusable = viewable && existingEffort === choice.effort && detailed;
   const enough = Number.isFinite(subscription.credits_remaining) && subscription.credits_remaining >= choice.cost;
+  // Daily / monthly call limits (issue #5). Reopening a current interpretation asks no model, so it is never blocked.
+  const quota = readQuota(subscription.call_quota);
+  const quotaIssue = isAdmin || reusable ? '' : quotaBlock(quota);
   const allowed =
-    isAdmin || (subscription.status === 'active' && enough) || (reusable && ['active', 'expired', 'exhausted'].includes(subscription.status));
+    (isAdmin || (subscription.status === 'active' && enough) || (reusable && ['active', 'expired', 'exhausted'].includes(subscription.status))) &&
+    !quotaIssue;
   const historical = report.report_stale === true;
   const serviceIssue = !config
     ? 'AI 连接状态尚未确认，读取成功后可开始研究。'
@@ -82,7 +87,9 @@ export function ResearchControl({ sector, report, onOpen }: { sector: Sector; re
   let message = historical
     ? '请返回最新报告后生成个人 AI 研究。'
     : job?.message ||
-      (!allowed
+      (quotaIssue
+        ? quotaIssue + '；未发起请求，也不扣次数。'
+        : !allowed
         ? (subscription.status === 'active' && !enough
             ? '当前余额不足 ' + price + ' 点'
             : subscription.status
@@ -111,7 +118,9 @@ export function ResearchControl({ sector, report, onOpen }: { sector: Sector; re
 
   return (
     <section className="flex flex-col gap-2">
-      <small className="text-xs text-muted-foreground tabular-nums">中度推理 1 点 / 份 · 极高推理 1.5 点 / 份</small>
+      <small className="text-xs text-muted-foreground tabular-nums">
+        中度推理 1 点 / 份 · 极高推理 1.5 点 / 份{isAdmin ? '' : ' · ' + quotaText(quota)}
+      </small>
       <div className="flex flex-wrap gap-2">
         <Button
           disabled={disabled}
