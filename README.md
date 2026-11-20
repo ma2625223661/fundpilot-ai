@@ -1,5 +1,7 @@
 # FundPilot AI · 板块研究
 
+> 2026-11 新增独立量化模块 **FactorLab**：`backend/quant/` 实现多因子构造、Barra 风格中性化、Löwdin 对称正交、IC/IR、自适应权重、long-only/多空回测、风险归因、压力测试和保护性看跌期权测算。演示报告见 [`reports/factorlab-demo/index.html`](reports/factorlab-demo/index.html)，方法与口径见 [`docs/研究方法/factorlab-v0.1.md`](docs/研究方法/factorlab-v0.1.md)。演示使用合成数据，不是实盘业绩。
+
 默认启用账号密码登录。首次在运行后台的电脑上打开网站，请自行创建管理员账号和密码；之后必须登录才能访问研究页面、报告接口和个人数据。没有预设或通用密码。其他用户可注册自己的账号，关注列表与研究记录按账号分别保存。
 
 支持可配置的注册手机号验证、已有账号绑定和短信验证码登录。默认未启用短信，账号密码注册与登录继续可用；短信启用后默认要求新用户验证手机号。开通配置与接口见 [手机号验证说明](docs/部署运维/phone-verification.md)。

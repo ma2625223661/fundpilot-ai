@@ -12,6 +12,7 @@
 - 云服务器原生部署见 [`deploy/vps/README.md`](../deploy/vps/README.md) 和 [`deploy/vps/NATIVE-OPERATIONS.md`](../deploy/vps/NATIVE-OPERATIONS.md)。
 
 ## 研究方法
+- [FactorLab v0.1 多因子风险归因与正交化](研究方法/factorlab-v0.1.md)：因子清洗、Barra 中性化、对称正交、IC/IR、回测、压力测试与期权对冲。
 - [板块研究分 v2 与独立环境风险](研究方法/scoring-model-v2-20261031.md)
 - [全站公司样本与证据口径](研究方法/company-sample-pools-20261031.md)
 - [市场流动性指数](研究方法/market-liquidity-20261031.md)
