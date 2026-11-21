@@ -16,13 +16,13 @@ import { cn } from '@/lib/utils';
 /** Button that opens the palette; the sidebar shows the wide form, the phone header the icon. */
 export function SectorSearchTrigger({ onOpen, compact = false }: { onOpen: () => void; compact?: boolean }) {
   return compact ? (
-    <Button variant="ghost" size="icon" aria-label="搜索板块（Ctrl+K）" onClick={onOpen}>
+    <Button variant="ghost" size="icon" aria-label="搜索板块、页面和设置（Ctrl+K）" onClick={onOpen}>
       <Search aria-hidden="true" />
     </Button>
   ) : (
     <Button variant="outline" className="w-full justify-start gap-2 text-muted-foreground" onClick={onOpen}>
       <Search aria-hidden="true" />
-      <span className="flex-1 text-left">搜索板块</span>
+      <span className="flex-1 text-left">搜索</span>
       <kbd className="rounded-sm border border-border px-1.5 text-xs font-normal text-muted-foreground">Ctrl K</kbd>
     </Button>
   );
@@ -76,7 +76,7 @@ export function SectorSearchDialog({ open, setOpen, onNavigate }: { open: boolea
 
   return (
     <>
-      <CommandDialog open={open} onOpenChange={setOpen} title="搜索板块与页面" description="输入板块、页面或设置名称，回车打开">
+      <CommandDialog open={open} onOpenChange={setOpen} title="搜索" description="输入板块、页面或设置的名称，回车打开">
         {/* Plain substring match: names are Chinese, and fuzzy matching surfaces unrelated sectors. */}
         <Command filter={(value, search) => (value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0)}>
           <CommandInput placeholder="输入板块、页面或设置，如半导体、数据连接…" />

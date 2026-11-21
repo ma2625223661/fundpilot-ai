@@ -14,7 +14,7 @@ from research_accounts import AccountError
 from research_ai_cache import semantic_fingerprint
 from research_responses import cache_identity, is_responses
 from research_sector_ai import SYSTEM, _batch_evidence, _eligible, _enrich_sector_report, _sources, has_detailed_advice
-from research_subscriptions import CREDIT_COSTS, NARRATIVE_FIELDS, content_identity, select_interpretation
+from research_subscriptions import CREDIT_COSTS, NARRATIVE_FIELDS, content_identity, quota_message, select_interpretation
 
 
 def configuration_identity(config):
@@ -130,6 +130,12 @@ class ManualSectorResearch:
             units = 0 if free else int(CREDIT_COSTS[effort] * 2)
             if not free and (not summary['can_unlock'] or summary['credits_remaining'] < CREDIT_COSTS[effort]):
                 raise AccountError('订阅未开通、已暂停、已到期或研究点数不足，未扣减额度', 403)
+            # Daily and monthly call limits set by the administrator (Beijing time).
+            # Checked before any request; only a completed model call is counted.
+            # A current interpretation (identity) is reused without asking the model.
+            blocked = '' if identity else quota_message(summary['call_quota'])
+            if blocked:
+                raise AccountError(blocked, 403)
             db.execute('INSERT INTO ai_research_preferences VALUES (?,?,?) ON CONFLICT(user_id) '
                        'DO UPDATE SET reasoning_effort=excluded.reasoning_effort,updated=excluded.updated',
                        (user_id,effort,now))
@@ -302,6 +308,9 @@ class ManualSectorResearch:
                 generated_report = {**report, 'sector_analysis':[existing]}
                 settled = self.subscriptions._unlock(db,user_id,generated_report,sector_id,content_identity(existing),
                                                      reasoning_effort=effort,reservation_id=job_id)
+                if not reused:
+                    # Only a call that actually asked the model uses one of today's calls.
+                    self.subscriptions.record_call(db,user_id,job_id)
                 db.execute('INSERT OR REPLACE INTO ai_manual_narratives VALUES (?,?,?,?,?,?)',
                            (report['as_of'],sector_id,effort,signature,json.dumps(narrative,ensure_ascii=False),now))
                 saved_report=copy.deepcopy(report)

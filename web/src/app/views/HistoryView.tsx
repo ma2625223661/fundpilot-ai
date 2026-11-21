@@ -56,8 +56,7 @@ export function HistoryView() {
   return (
     <>
       <PageHeader
-        eyebrow="研究记录"
-        title="板块研究记录"
+        title="研究记录"
         description="回看研究证据，复核五日表现，积累下一轮判断依据。"
         actions={
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -71,7 +70,7 @@ export function HistoryView() {
           />
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>清空全部板块研究记录？</AlertDialogTitle>
+              <AlertDialogTitle>清空全部研究记录？</AlertDialogTitle>
               <AlertDialogDescription className="text-pretty">
                 将删除{accountMode ? '当前账号保存的' : '本浏览器保存的'} {histories.length} 份历史报告，删除后无法恢复。五日复盘的原始核验记录独立保存，不受影响。
               </AlertDialogDescription>

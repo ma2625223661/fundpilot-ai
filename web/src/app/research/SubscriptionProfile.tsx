@@ -13,12 +13,14 @@ import { ServiceLink } from '@/app/research/SectorAccess';
 import { creditText, useSubscription } from '@/app/research/SubscriptionContext';
 import { subscriptions } from '@/lib/research';
 import { cn } from '@/lib/utils';
+import { readQuota } from '@/lib/quota';
 
 const LEDGER_NAMES: Record<string, string> = {
   grant: '管理员开通 / 续订',
   pause: '管理员暂停服务',
   resume: '管理员恢复服务',
   unlock: '解锁板块解读',
+  limits: '管理员调整 AI 调用次数',
 };
 const EFFORTS: [string, string, string][] = [
   ['medium', '中度推理', '日常跟踪'],
@@ -33,6 +35,7 @@ export function SubscriptionProfile() {
   const p = current ? subscriptions.presentation(current) : null;
   const choice = current ? subscriptions.reasoningChoice(current) : null;
   const admin = session.isAdmin;
+  const quota = readQuota(current?.call_quota);
   // An administrator has no personal credits to show; point to what an admin manages instead.
   if (admin)
     return (
@@ -80,6 +83,20 @@ export function SubscriptionProfile() {
           />
           {p?.status !== 'admin' && <Stat label="有效期至" value={p ? p.expiry : '读取中'} />}
           <Stat label="已解锁解读" value={p ? p.count + ' 份' : '—'} />
+          {p?.status !== 'admin' && (
+            <>
+              <Stat
+                label="今日剩余调用"
+                value={quota?.configured ? quota.dailyRemaining + ' / ' + quota.dailyLimit + ' 次' : '—'}
+                note={quota && !quota.configured ? '管理员尚未设置' : '北京时间每日 0 点恢复'}
+              />
+              <Stat
+                label="本月剩余调用"
+                value={quota?.configured ? quota.monthlyRemaining + ' / ' + quota.monthlyLimit + ' 次' : '—'}
+                note={quota?.month ? `${quota.month.slice(0, 4)} 年 ${Number(quota.month.slice(5))} 月，只计成功调用` : undefined}
+              />
+            </>
+          )}
         </div>
         {current && (
           <Disclosure

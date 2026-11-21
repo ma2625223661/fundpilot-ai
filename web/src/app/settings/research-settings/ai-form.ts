@@ -84,10 +84,10 @@ export function calendarSummary(calendar: Row | null | undefined) {
 export function budgetLimits(shown: AiForm): { limits: Row } | { error: string } {
   const limits = { reuse_enabled: shown.reuse, daily_request_limit: Number(shown.requests), daily_token_limit: Number(shown.tokens) };
   if (!Number.isInteger(limits.daily_request_limit) || limits.daily_request_limit < 1 || limits.daily_request_limit > 10000) {
-    return { error: '请输入1至10000的每日请求上限。' };
+    return { error: '请输入 1 至 10000 的每日请求上限。' };
   }
   if (!Number.isInteger(limits.daily_token_limit) || limits.daily_token_limit < 1000 || limits.daily_token_limit > 1000000000) {
-    return { error: '请输入1000至1000000000的每日Token预算。' };
+    return { error: '请输入 1000 至 1000000000 的每日 Token 预算。' };
   }
   return { limits };
 }

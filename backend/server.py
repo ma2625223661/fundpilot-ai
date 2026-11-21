@@ -304,6 +304,7 @@ class Handler(SimpleHTTPRequestHandler):
                 'lan_urls': [] if getattr(self.server, 'local_only', False) else
                             [f'http://{address}:{self.server.server_port}/index.html' for address in lan_addresses()],
                 'scope': 'same_network',
+                'local_only': bool(getattr(self.server, 'local_only', False)),
             })
         if parsed.path == '/api/health':
             return self.reply(200, {'ok': True, 'provider': 'DeepSeek', 'version': 6,

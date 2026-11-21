@@ -1,6 +1,7 @@
 // AI support contact (QR code) and mobile access addresses (port of device-access.js).
 import { useRef, useState } from 'react';
-import { Copy, Download, MessageCircle, Smartphone } from 'lucide-react';
+import { Copy, Download, MessageCircle, ShieldAlert, Smartphone } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,11 +93,15 @@ export function MobileAccessCard() {
   const [chosen, setChosen] = useState('');
   const current = urls.includes(chosen) ? chosen : urls.find(url => new URL(url).hostname === location.hostname) || urls[0] || '';
   const preview = cloud && access.preview === true;
+  // Local edition started without --allow-lan: phones cannot reach it by design.
+  const localOnly = !cloud && access.local_only === true;
   const defaultStatus = cloud
     ? preview
       ? '本机预览网址不能直接分享给手机或外网用户。'
       : '云端访问网址；手机可使用 Wi-Fi 或移动网络。'
-    : urls.length
+    : localOnly
+      ? '当前为仅本机访问（默认），手机和局域网其他设备无法打开。'
+      : urls.length
       ? access.can_manage_settings
         ? '切换 Wi-Fi 后，请刷新页面获取新的手机访问网址。'
         : '已连接同一局域网，可用此网址继续访问。'
@@ -168,6 +173,17 @@ export function MobileAccessCard() {
           )}
           <FieldDescription role="status">{status || defaultStatus}</FieldDescription>
         </Field>
+        {!cloud && (
+          <Alert>
+            <ShieldAlert aria-hidden="true" />
+            <AlertTitle>{localOnly ? '如何允许手机访问' : '局域网连接未加密'}</AlertTitle>
+            <AlertDescription className="text-pretty">
+              {localOnly
+                ? '网站默认只允许运行它的这台电脑访问。需要手机访问时，用 start.cmd --allow-lan 启动（或设置环境变量 FUNDPILOT_ALLOW_LAN=1 后再启动），并只在可信的家庭或办公网络中使用：局域网连接是未加密的 HTTP，同一网络中的人可能看到登录密码和会话。需要更安全的远程访问，请通过 HTTPS 反向代理提供服务。'
+                : '当前允许手机和局域网访问，连接是未加密的 HTTP，同一网络中的人可能看到登录密码和会话。只在可信的家庭或办公网络中登录；不需要时请去掉 --allow-lan 重新启动，或通过 HTTPS 反向代理提供服务。'}
+            </AlertDescription>
+          </Alert>
+        )}
         <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
           {tips.map(tip => (
             <li key={tip} className="text-pretty">

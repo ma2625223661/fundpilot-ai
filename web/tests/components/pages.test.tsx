@@ -74,7 +74,7 @@ describe('history', () => {
     // Clearing records asks first; nothing is removed until the dialog is confirmed.
     await waitFor(() => expect((screen.getByRole('button', { name: /清空板块记录/ }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: /清空板块记录/ }));
-    expect(await screen.findByText('清空全部板块研究记录？')).toBeTruthy();
+    expect(await screen.findByText('清空全部研究记录？')).toBeTruthy();
     expect(screen.getByRole('button', { name: '保留记录' })).toBeTruthy();
   });
 });

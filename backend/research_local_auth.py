@@ -32,7 +32,8 @@ class LocalAccountHandler(CloudHandler):
             'can_trigger_research':user['role'] == 'admin', 'scope':'account_local',
             'lan_urls':[] if getattr(self.server, 'local_only', False) else
                 [f'http://{address}:{self.server.server_port}/index.html' for address in lan_addresses()],
-            'site_url':self.request_origin() + '/index.html', 'preview':False}
+            'site_url':self.request_origin() + '/index.html', 'preview':False,
+            'local_only':bool(getattr(self.server, 'local_only', False))}
 
     def do_GET(self):
         if urlsplit(self.path).path == '/api/health':

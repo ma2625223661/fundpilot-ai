@@ -454,9 +454,15 @@ def main(argv=None):
     parser.add_argument('--no-browser', action='store_true', help='不自动打开浏览器')
     parser.add_argument('--port', type=int, default=int(os.environ.get('FUNDPILOT_PORT', '8765')))
     parser.add_argument('--reload', action='store_true', help='热更新：修改 .py 文件后自动重启后台')
+    # Local-only is the default (issue #5): over the LAN the site speaks plain HTTP,
+    # so anyone on the same Wi-Fi could read passwords and sessions. Phone and LAN
+    # access must be switched on deliberately. --local-only stays accepted.
     parser.add_argument('--local-only', action='store_true',
                         default=os.environ.get('FUNDPILOT_LOCAL_ONLY') == '1',
-                        help='只允许本机访问，手机和局域网其他设备无法打开')
+                        help='只允许本机访问（默认即如此，保留此参数以兼容旧用法）')
+    parser.add_argument('--allow-lan', action='store_true',
+                        default=os.environ.get('FUNDPILOT_ALLOW_LAN') == '1',
+                        help='允许手机和局域网其他设备访问（未加密的 HTTP，只在可信网络中使用）')
     parser.add_argument('--background', action='store_true', help='不显示窗口，在后台运行网站')
     parser.add_argument('--console', action='store_true', help='显示命令窗口运行（排查问题时使用）')
     parser.add_argument('--stop', action='store_true', help='停止在后台运行的网站')
@@ -464,6 +470,7 @@ def main(argv=None):
     parser.add_argument('--control', help=argparse.SUPPRESS)
     parser.add_argument('--parent-pid', type=int, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    args.local_only = args.local_only or not args.allow_lan
     if not 1 <= args.port <= 65535:
         parser.error('端口须为 1～65535 的整数')
     if args.check:
@@ -509,7 +516,11 @@ def main(argv=None):
         print('按 Ctrl+C 可停止；下次开机请再次双击 start.cmd。', flush=True)
         print('首次打开请自己创建管理员账号和密码；以后先登录才能使用。', flush=True)
     if args.local_only:
-        print('已启用仅本机访问：手机和局域网其他设备无法打开本网站。', flush=True)
+        print('仅本机访问：手机和局域网其他设备无法打开本网站。需要时用 start.cmd --allow-lan 启动'
+              '（或设置 FUNDPILOT_ALLOW_LAN=1），并只在可信网络中使用。', flush=True)
+    else:
+        print('已允许手机和局域网访问。注意：局域网连接是未加密的 HTTP，同一网络中的人可能看到登录密码和会话；'
+              '只在可信的家庭或办公网络中使用，需要更安全的远程访问请通过 HTTPS 反向代理提供服务。', flush=True)
     try:
         server.auto_engine.start()
         if not getattr(server, 'skip_account_backup', False):

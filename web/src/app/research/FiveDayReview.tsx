@@ -125,7 +125,7 @@ function Evidence({ item }: { item: Row }) {
     <Disclosure
       title={
         '复盘依据 · ' +
-        (item.review_kind === 'company' ? (e.members?.length || 0) + ' 家公司' : item.review_kind === 'rate' ? '隔夜Shibor' : '明确映射的价格指数')
+        (item.review_kind === 'company' ? (e.members?.length || 0) + ' 家公司' : item.review_kind === 'rate' ? '隔夜 Shibor' : '明确映射的价格指数')
       }
     >
       <p>{item.calendar_label || '交易日期待核验'}</p>

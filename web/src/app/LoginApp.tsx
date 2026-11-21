@@ -190,9 +190,8 @@ export function LoginApp() {
       <section className="flex flex-col gap-6 lg:col-span-3">
         <Brand subtitle="自动板块研究工作台" />
         <div className="flex flex-col gap-3">
-          <span className="text-sm font-medium text-primary">你的研究工作台</span>
-          <h1 className="text-4xl font-semibold text-balance">看清证据，专注有价值的研究。</h1>
-          <p className="text-lg text-muted-foreground text-pretty">共享市场洞察，保留自己的关注与思考。</p>
+          <h1 className="text-4xl font-semibold text-balance">登录 FundPilot AI</h1>
+          <p className="text-lg text-muted-foreground text-pretty">板块研究工作台：共享市场研究，保留自己的关注与记录。</p>
         </div>
         <ul className="hidden gap-3 sm:grid sm:grid-cols-3">
           {FEATURES.map(([Icon, title, copy]) => (

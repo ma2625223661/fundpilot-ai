@@ -45,6 +45,7 @@ class ManualResearchTests(unittest.TestCase):
         self.other = self.accounts.create_user('another',http_tests.PASSWORD)
         self.sub = self.accounts.subscriptions
         self.sub.manage(self.admin['id'],self.user['id'],'grant','manual-initial-grant',credits=5,days=30)
+        self.sub.manage(self.admin['id'],self.user['id'],'limits','manual-initial-grant-calls',daily_limit=100,monthly_limit=1000)
         self.config = copy.deepcopy(CONFIG)
         self.report = evidence(2); self.report['as_of'] = '2026-11-02T19:55:00+08:00'
         self.report_stale = False
@@ -132,6 +133,7 @@ class ManualResearchTests(unittest.TestCase):
         original_score=self.report['sector_analysis'][0]['score']
         original_content=content_identity(first['sector'])
         self.sub.manage(self.admin['id'],self.other['id'],'grant','history-other-grant',credits=5,days=30)
+        self.sub.manage(self.admin['id'],self.other['id'],'limits','history-other-grant-calls',daily_limit=100,monthly_limit=1000)
         self.config['revision']+=1
         self.config['responses_base_url']='https://different-fixture.example/v1'
         self.report['sector_analysis'][0]['score']=0
@@ -166,6 +168,7 @@ class ManualResearchTests(unittest.TestCase):
         first=self.run_job()
         original_report=copy.deepcopy(self.report)
         self.sub.manage(self.admin['id'],self.other['id'],'grant','legacy-history-other',credits=5,days=30)
+        self.sub.manage(self.admin['id'],self.other['id'],'limits','legacy-history-other-calls',daily_limit=100,monthly_limit=1000)
         self.config['revision']+=1
         self.config['responses_base_url']='https://separate-fixture.example/v1'
         def changed_response(report,ids,config):
@@ -190,6 +193,7 @@ class ManualResearchTests(unittest.TestCase):
         self.assertEqual(first['status'],'completed',first)
         original_time=first['sector']['ai_generated_at']
         self.sub.manage(self.admin['id'],self.other['id'],'grant','admin-history-other',credits=5,days=30)
+        self.sub.manage(self.admin['id'],self.other['id'],'limits','admin-history-other-calls',daily_limit=100,monthly_limit=1000)
         self.config['revision']+=1
         self.config['responses_base_url']='https://admin-history-fixture.example/v1'
         def different(report,ids,config):
@@ -283,6 +287,7 @@ class ManualResearchTests(unittest.TestCase):
 
     def test_duplicate_clicks_use_one_job_and_reserve_balance_against_other_unlocks(self):
         self.sub.manage(self.admin['id'],self.user['id'],'grant','manual-extra-grant',credits=0,days=1)
+        self.sub.manage(self.admin['id'],self.user['id'],'limits','manual-extra-grant-calls',daily_limit=100,monthly_limit=1000)
         with self.accounts.connection() as db:
             db.execute('UPDATE ai_subscriptions SET credits=3 WHERE user_id=?',(self.user['id'],))
         entered,release=threading.Event(),threading.Event()
@@ -598,6 +603,7 @@ class ManualResearchHTTPTests(unittest.TestCase):
         checker=Mock(side_effect=probe)
         jobs,store,admin,member,body=self.prepare_live_jobs(checker,requester)
         self.server.accounts.subscriptions.manage(admin['id'],member['id'],'grant','http-connect-grant',credits=3,days=30)
+        self.server.accounts.subscriptions.manage(admin['id'],member['id'],'limits','http-connect-grant-calls',daily_limit=100,monthly_limit=1000)
         code,started,_=self.request('/api/me/ai-research',body,self.member_cookie,self.member_csrf)
         self.assertEqual(code,202)
         self.assertTrue(connecting.wait(2))
@@ -635,6 +641,7 @@ class ManualResearchHTTPTests(unittest.TestCase):
         self.assertEqual(click()[0],403)
         sub=self.server.accounts.subscriptions
         sub.manage(admin['id'],member['id'],'grant','http-failure-grant',credits=3,days=30)
+        sub.manage(admin['id'],member['id'],'limits','http-failure-grant-calls',daily_limit=100,monthly_limit=1000)
         sub.manage(admin['id'],member['id'],'pause','http-failure-pause')
         self.assertEqual(click()[0],403)
         sub.manage(admin['id'],member['id'],'resume','http-failure-resume')
@@ -672,6 +679,7 @@ class ManualResearchHTTPTests(unittest.TestCase):
         other=self.request('/api/auth/me',cookie=other_cookie)[1]
         for user in (member,other):
             self.server.accounts.subscriptions.manage(admin['id'],user['id'],'grant','history-http-'+user['id'],credits=3,days=30)
+            self.server.accounts.subscriptions.manage(admin['id'],user['id'],'limits','history-http-calls-'+user['id'],daily_limit=100,monthly_limit=1000)
         results=[]
         for index,(cookie,csrf) in enumerate(((self.member_cookie,self.member_csrf),(other_cookie,other_csrf))):
             if index:store.configure(responses_base_url='https://different-fixture.example/v1')

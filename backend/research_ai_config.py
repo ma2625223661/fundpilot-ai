@@ -193,7 +193,8 @@ class AIConfigStore:
                     'provider':'responses' if is_responses(state) else 'deepseek',
                     'reasoning_effort':state.get('reasoning_effort') if is_responses(state) else None,
                     'responses_base_url':state.get('responses_base_url', ''),
-                    'key_hint': ('••••' + state['key'][-4:] if len(state['key']) >= 8 else '••••') if state['key'] else '',
+                    # Never any characters of the key, not even the last few (issue #5).
+                    'key_hint': '密钥（内容不显示）' if state['key'] else '',
                     'revision': state['revision'], 'verification': state['verification'],
                     'last_verified_at': state['last_verified_at'], 'error': state['error'],
                     'available_models': list(state['available_models']), 'storage': 'windows-dpapi',

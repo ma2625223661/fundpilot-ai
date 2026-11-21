@@ -204,14 +204,18 @@ class AccountStore:
     def login(self, username, password, with_session=False):
         if not isinstance(username, str) or len(username) > 64:
             username = ''
-        self.rate_limit('login:' + digest_token(username.casefold()), 10, 600)
+        bucket = 'login:' + digest_token(username.casefold())
         with self.connection() as db:
             row = db.execute('SELECT * FROM users WHERE username=? COLLATE NOCASE', (username,)).fetchone()
         matches = password_matches(password, row['password_hash'] if row else self.dummy_hash)
         if not row or not matches or row['disabled']:
+            # Only failures count, after the password check (issue #5): someone who
+            # merely knows a username can no longer lock its owner out. Guessing is
+            # still bounded by this per-name count, the per-IP limit and the captcha.
+            self.rate_limit(bucket, 10, 600)
             raise AccountError('用户名或密码不正确', 401)
         with self.connection() as db:
-            db.execute('DELETE FROM attempts WHERE bucket=?', ('login:' + digest_token(username.casefold()),))
+            db.execute('DELETE FROM attempts WHERE bucket=?', (bucket,))
         user = self.user(row)
         if with_session:
             return user, self.issue_session(row['id'], credential=row['password_hash'])
@@ -300,8 +304,10 @@ class AccountStore:
                     'INSERT OR IGNORE INTO reports VALUES (?,?,?,?,?)'
         db.execute(statement,(report_id,compressed,str(report.get('summary') or '')[:500],
                               len(report.get('sector_analysis',[])),self.clock()))
+        # Keep the newest 40 plus every report some user's record still points to,
+        # snapshot or not; otherwise older records silently lost their report (issue #5).
         db.execute('DELETE FROM reports WHERE id NOT IN (SELECT id FROM reports ORDER BY created DESC LIMIT 40) '
-                   'AND id NOT IN (SELECT report_id FROM records WHERE payload IS NOT NULL) AND id!=?',
+                   'AND id NOT IN (SELECT report_id FROM records) AND id!=?',
                    (protected_id or '',))
         return True
 
@@ -331,11 +337,19 @@ class AccountStore:
                 db.execute('BEGIN IMMEDIATE')
                 snapshots={row['report_id']:row['payload'] for row in db.execute(
                     'SELECT report_id,payload FROM records WHERE user_id=?',(user_id,))}
+                wanted = list(dict.fromkeys(report_ids))
+                # Check everything before deleting anything: an id that is no longer
+                # archived rejects the whole save, instead of being skipped while the
+                # request still reports success (issue #5).
+                missing = [report_id for report_id in wanted
+                           if not db.execute('SELECT 1 FROM reports WHERE id=?', (report_id,)).fetchone()]
+                if missing:
+                    raise AccountError(f'有 {len(missing)} 份研究记录对应的报告已不在服务器上，本次未保存，原有记录未改动；'
+                                       '请刷新研究记录后再试', 409)
                 db.execute('DELETE FROM records WHERE user_id=?', (user_id,))
-                for position, report_id in enumerate(dict.fromkeys(report_ids)):
-                    if db.execute('SELECT 1 FROM reports WHERE id=?', (report_id,)).fetchone():
-                        db.execute('INSERT INTO records(user_id,report_id,position,payload) VALUES (?,?,?,?)',
-                                   (user_id,report_id,position,snapshots.get(report_id)))
+                for position, report_id in enumerate(wanted):
+                    db.execute('INSERT INTO records(user_id,report_id,position,payload) VALUES (?,?,?,?)',
+                               (user_id,report_id,position,snapshots.get(report_id)))
             rows = db.execute('SELECT reports.id,summary,sectors FROM records JOIN reports ON reports.id=records.report_id '
                               'WHERE user_id=? ORDER BY position LIMIT 20', (user_id,)).fetchall()
         return [{'cloud_record': True, 'research_scope': 'sectors', 'as_of': row['id'],

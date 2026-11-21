@@ -58,7 +58,10 @@ export function SettingsView() {
 
   return (
     <>
-      <PageHeader eyebrow="控制中心" title="模型与数据设置" description="选择研究深度与执行计划，管理数据连接和个人账号。" />
+      <PageHeader
+        title="设置"
+        description={canManage ? '选择研究深度与执行计划，管理数据连接和个人账号。' : '查看研究计划与数据连接状态，管理个人账号。公共设置只能由管理员在运行网站的电脑上修改。'}
+      />
       {!canManage && (
         <Alert>
           <Info aria-hidden="true" />
