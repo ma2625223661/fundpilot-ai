@@ -46,6 +46,7 @@ class NewDirectionModelIntegration(unittest.TestCase):
         mocks={
             'now_iso':NOW,'sector_catalog':[board],
             'collect_macro_risk':({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'}),
+            'collect_long_wave_evidence':({},[]),
             'collect_sector_market':{'market':[],'news':[],'sources':[],'warnings':[]},
             'collect_sector_quotes':([],[]),'collect_verified_references':([],[],{}),
             'fetch_text':'','collect_sector_histories':({},[])}

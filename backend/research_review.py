@@ -23,6 +23,15 @@ from research_numbers import strict_finite_number as finite
 VERSION = 'five_session_review_v1'
 REFERENCE = 'index_csi300'
 REFERENCE_LABEL = '沪深300公司样本参考（非官方指数）'
+OFFICIAL_LABEL = '沪深300指数（中证指数公司编制的官方价格指数，腾讯财经日线）'
+
+
+def official_csi300(report):
+    """Completed daily closes of the official CSI 300 index from the report (issue #7)."""
+    for row in ((report or {}).get('snapshot') or {}).get('market', []) or []:
+        if isinstance(row, dict) and row.get('code') == 'sh000300':
+            return _series(row.get('history'), 'close'), row.get('source_id') or 'market_tencent'
+    return {}, None
 ELIGIBLE = ('admin', 'active', 'exhausted')
 METHOD = ('走势复盘分满分100，四项各25分：五日趋势、相对样本表现、回撤控制、上涨持续性。'
           '趋势=25×clip(0.5+五日收益/(4×前20日收益标准差×√5))；'
@@ -30,10 +39,21 @@ METHOD = ('走势复盘分满分100，四项各25分：五日趋势、相对样�
           '回撤=25×clip(1−五日最大回撤/(2×前20日收益标准差×√5))；'
           '持续性=25×(上涨天数+平盘天数×0.5)/5。标准差只取复盘期开始之前的20个日收益；'
           '零波动时趋势/相对按收益正、零、负给25/12.5/0，回撤为零给25，否则0。'
-          '缺失项不补分、不折算为100分。A股公司以沪深300公司样本为参照；港股公司以恒生价格指数、'
+          '缺失项不补分、不折算为100分。A股公司优先以沪深300官方价格指数为参照，缺少同日数据时改用沪深300公司样本；港股公司以恒生价格指数、'
           '美股公司以标普500价格指数为参照，并按当地交易日计算。'
           '仅有参考指数时另用价格观察模型：趋势40、回撤35、持续性25，不套用公司相对分。'
           '货币市场另用隔夜Shibor流动性模型，以利率和基点表示，不计算投资回报。')
+
+
+def relative_gap(label, benchmark, days):
+    """Which reference and which dates are missing, rather than only '待补数据' (issue #7)."""
+    missing = [day for day in days if day not in benchmark]
+    if not benchmark:
+        return '%s 在复盘期内没有可用日线，相对表现未评分；不以其他指数代替。' % label
+    if not missing:
+        return '%s 末日仍为盘中数据，等待正式收盘后再评相对表现。' % label
+    shown = '、'.join(missing[-4:]) + (' 等 %d 个交易日' % len(missing) if len(missing) > 4 else '')
+    return '%s 缺少 %s 的收盘数据，相对表现未评分；缺失时不补造。' % (label, shown)
 
 
 def sessions(end, count):
@@ -137,12 +157,16 @@ def price_review(sector, reference, end, *, report=None, as_of=None):
         ref_source_ids = ref['source_ids']
         reference_sources = ref['sources']
     else:
-        benchmark = _series((reference or {}).get('custom_index', {}).get('history')) if supported(reference or {}) else {}
-        ref_source_ids = [(reference or {}).get('custom_index', {}).get('id')]
+        official, official_source = official_csi300(report)
+        if all(day in official for day in days):
+            benchmark, ref_source_ids, reference_label = official, [official_source], OFFICIAL_LABEL
+        else:
+            benchmark = _series((reference or {}).get('custom_index', {}).get('history')) if supported(reference or {}) else {}
+            ref_source_ids = [(reference or {}).get('custom_index', {}).get('id')]
     ref_return = excess = None
     source_ids = list(evidence['source_ids'])
-    if all(day in benchmark for day in days):
-        ref_index = reference.get('custom_index') or {}
+    if reference_label != OFFICIAL_LABEL and all(day in benchmark for day in days):
+        ref_index = (reference or {}).get('custom_index') or {}
         if ref_index.get('is_intraday') and str(ref_index.get('as_of',''))[:10] == days[-1]:
             benchmark = {}
     if all(day in benchmark for day in days):
@@ -171,9 +195,10 @@ def price_review(sector, reference, end, *, report=None, as_of=None):
             component['points'] = round(component['points'], 2)
     complete = all(c['points'] is not None for c in components)
     score = round(sum(c['points'] for c in components), 2) if complete else None
+    gap = '' if complete else relative_gap(reference_label, benchmark, days)
     return {**result, 'status': 'completed' if complete else 'partial', 'score': score,
             'score_label': ('强势表现' if score >= 75 else '平稳表现' if score >= 50 else '偏弱表现' if score >= 25 else '弱势表现') if complete else '参考样本待补',
-            'reason': '' if complete else '相同日期的参考样本数据不完整，相对表现未评分。',
+            'reason': '' if complete else gap,
             'period_start': days[-5], 'baseline_date': days[-6], 'period_end': days[-1],
             'trading_dates': days[-5:], 'components': components, 'return_pct': round(ret*100, 3),
             'reference_return_pct': round(ref_return*100, 3) if ref_return is not None else None,

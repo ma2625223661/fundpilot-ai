@@ -25,6 +25,7 @@ from research_sector_references import VERIFIED_REFERENCES, collect_cached_refer
 from research_bond_model import score_bond, METHOD as BOND_SCORE_METHOD
 from research_convertible_model import score_convertible, METHOD as CONVERTIBLE_SCORE_METHOD
 from research_macro_risk import collect_cached_macro_risk as collect_macro_risk
+from research_long_wave_data import collect_cached_long_wave_evidence as collect_long_wave_evidence
 from research_strategy import _pressure, _regime
 from research_numbers import parse_number as _number, clamp as _clamp
 
@@ -927,16 +928,21 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
     catalog = sector_catalog()
     prior_public = (previous or {}).get('_public_report', {})
     quote_only = bool((previous or {}).get('_public_only') and prior_public)
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         common_future = pool.submit(collect_sector_market)
         quote_future = pool.submit(collect_sector_quotes)
         index_future = pool.submit(fetch_text, EXTRA_INDEX_URL, 'gbk')
         reference_future = pool.submit(collect_verified_references, now_iso())
         macro_future = pool.submit(collect_macro_risk, now_iso())
+        long_wave_future = pool.submit(collect_long_wave_evidence, now_iso())
         snapshot = common_future.result()
         quotes, sources = quote_future.result()
         reference_quotes, reference_sources, reference_histories = reference_future.result()
         macro_evidence, macro_source = macro_future.result()
+        try:
+            long_wave_evidence, long_wave_sources = long_wave_future.result()
+        except Exception:
+            long_wave_evidence, long_wave_sources = {}, []
         index_source = {'id': 'sector_indices_tencent', 'name': '腾讯财经 · 板块基准指数',
                         'url': EXTRA_INDEX_URL, 'status': 'ok', 'fetched_at': now_iso()}
         try:
@@ -950,7 +956,7 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
     snapshot['scope'] = '只研究市场、板块行情、行业成分、公司财务及公开公告和官方政策；板块清单不代表数据已完整接入。'
     as_of = now_iso()
     snapshot['as_of'] = as_of
-    snapshot['sources'].extend(sources + [index_source, macro_source] + reference_sources)
+    snapshot['sources'].extend(sources + [index_source, macro_source] + long_wave_sources + reference_sources)
     matches = match_sector_quotes(catalog, quotes, indices, reference_quotes)
     histories, history_sources = collect_sector_histories(
         {**{key: quote for key, quote in matches.items()
@@ -1192,6 +1198,7 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
                          'status': 'ok' if _quote_fresh(row, as_of) else 'stale'}
                         for row in snapshot.get('market', [])]
     strategy = {'schema_version': 1, 'panic': panic, 'regime': regime, 'macro_evidence': macro_evidence,
+                'long_wave_evidence': long_wave_evidence,
                 'summary': panic['summary'], 'minimum_holding_days': 7,
                 'trade_execution': False, 'research_scope': 'sectors'}
     report = {'research_scope': 'sectors', 'sector_schema_version': SECTOR_SCHEMA_VERSION, 'as_of': as_of,

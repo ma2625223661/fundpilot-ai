@@ -37,16 +37,28 @@ function Message({ title, copy, children }: { title: string; copy: string; child
   );
 }
 
+// Official price and credit values are year-on-year changes: show the sign with the number.
+const signalValue = (signal: Row) =>
+  (signal.signed && Number.isFinite(signal.value) && signal.value > 0 ? '+' : '') + format(signal.value);
+
+const signalDate = (signal: Row) => {
+  if (!signal.as_of) return '尚无有效日期';
+  const published = String(signal.as_of).replace('T', ' ').slice(0, signal.period ? 10 : 16);
+  return signal.period ? `统计期 ${signal.period} · 发布 ${published}` : `数据日期 ${published}`;
+};
+
 function Signals({ data }: { data: Row }) {
-  const later: Row[] = data.signals.slice(2);
+  // The two short-term signals always show; the long-term groups show once verified.
+  const shown: Row[] = data.signals.filter((s: Row, index: number) => index < 2 || s.status === 'ready');
+  const later: Row[] = data.signals.filter((s: Row) => !shown.includes(s));
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold">结论来自哪些数据</h2>
-        <span className="text-xs text-muted-foreground">月度需求 + 短端资金 · 来源可追溯</span>
+        <span className="text-xs text-muted-foreground">官方月度数据 + 短端资金 · 来源可追溯</span>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        {data.signals.slice(0, 2).map((signal: Row) => {
+        {shown.map((signal: Row) => {
           const reading = cycle.signalReading(signal);
           return (
             <Card key={signal.id} size="sm">
@@ -56,7 +68,7 @@ function Signals({ data }: { data: Row }) {
                   <Badge variant="outline">{signal.status === 'ready' ? '可核验' : '待补齐'}</Badge>
                 </div>
                 <p className="text-2xl font-semibold tabular-nums">
-                  {format(signal.value)}
+                  {signalValue(signal)}
                   <span className="ml-1 text-sm font-normal text-muted-foreground">{signal.unit || ''}</span>
                 </p>
                 <div>
@@ -65,16 +77,20 @@ function Signals({ data }: { data: Row }) {
                 </div>
                 <p className="text-sm text-pretty">{signal.detail}</p>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground tabular-nums">
-                  <span>数据日期 {signal.as_of ? signal.as_of.replace('T', ' ').slice(0, 16) : '尚无有效日期'}</span>
+                  <span>{signalDate(signal)}</span>
                   {signal.url && <SourceLink url={signal.url}>来源</SourceLink>}
+                  {(signal.related || []).map((item: Row) => item.url && (
+                    <SourceLink key={item.url} url={item.url}>{item.title}</SourceLink>
+                  ))}
                 </div>
-                <small className="text-xs text-muted-foreground text-pretty">{signal.scope}</small>
+                {reading.copy !== signal.scope && <small className="text-xs text-muted-foreground text-pretty">{signal.scope}</small>}
               </CardContent>
             </Card>
           );
         })}
       </div>
-      <Disclosure title={`还有 ${later.filter(s => s.status !== 'ready').length} 组长期数据待补齐 · 查看缺口`}>
+      {later.length > 0 && (
+      <Disclosure title={`还有 ${later.length} 组数据待补齐 · 查看缺口`}>
         {later.map(s => (
           <div key={s.id}>
             <b className="font-medium text-foreground">{s.title}</b>
@@ -82,6 +98,7 @@ function Signals({ data }: { data: Row }) {
           </div>
         ))}
       </Disclosure>
+      )}
     </section>
   );
 }
@@ -408,7 +425,17 @@ export function CycleView() {
                       ? '资金变化暂不指向明显宽松或紧张，继续跟踪需求与公司兑现。'
                       : '宏观数据仍待补齐，暂不判断当前情景。')}
                 </p>
-                <Badge variant="outline">长期周期阶段仍待验证</Badge>
+                <Badge variant="outline">{data.phase_label || '长期阶段待验证'}</Badge>
+                {data.phase_detail && <p className="text-xs text-muted-foreground text-pretty">{data.phase_detail}</p>}
+                {(data.phase_basis || []).length > 0 && (
+                  <ul className="flex flex-col gap-1 text-xs text-muted-foreground tabular-nums">
+                    {data.phase_basis.map((item: Row) => (
+                      <li key={item.id} className="text-pretty">
+                        {item.title}：{item.period ? `统计期 ${item.period}，` : ''}数据日期 {String(item.as_of || '—').slice(0, 10)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs text-muted-foreground">宏观证据覆盖</span>
@@ -447,7 +474,7 @@ export function CycleView() {
             </p>
             <p className="text-pretty">{data.method}</p>
             <p className="text-pretty">
-              情景规则：以新订单 PMI 的 50 分界与隔夜 Shibor 近 20 个有效发布日变化交叉观察；−5 至 +5 基点之间（不含边界）保持中间情景。阈值为本站初始研究设计，未经策略回测。两项短期数据不足以验证几十年的周期。
+              情景规则：以新订单 PMI 的 50 分界与隔夜 Shibor 近 20 个有效发布日变化交叉观察；−5 至 +5 基点之间（不含边界）保持中间情景。阈值为本站初始研究设计，未经策略回测。两项短期数据不足以验证几十年的周期；CPI、PPI 与社融为月度官方数据，只补充当前环境，生产率与资本开支取得官方口径前不判定康波阶段。
             </p>
             <p className="text-pretty">
               板块沿用基本面0–40、走势0–30、事件催化−30至+30的既有评分。只有完整评分进入研究档位；阶段分不能直接解释为“乐观看待”。环境风险独立显示，分数越高风险越大。公司样本不代表整个行业；估值、杠杆、现金流与主题收入需要额外核验。

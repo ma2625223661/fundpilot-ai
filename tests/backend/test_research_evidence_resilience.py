@@ -174,6 +174,7 @@ class EvidenceResilienceTests(unittest.TestCase):
                  'collect_sector_market': {'market': [], 'news': [], 'sources': [], 'warnings': []},
                  'collect_sector_quotes': ([], []), 'collect_verified_references': ([], [], {}),
                  'collect_macro_risk': ({'status': 'unavailable'}, {'id': 'macro', 'status': 'error'}),
+                 'collect_long_wave_evidence': ({}, []),
                  'fetch_text': '', 'collect_sector_histories': ({}, [])}
         with ExitStack() as stack:
             for name, value in mocks.items():
