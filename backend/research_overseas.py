@@ -277,6 +277,13 @@ def _save_cache():
             pass
 
 
+def _refetch(key, url, ttl=21600):
+    """Fetch past the cache once and replace the entry (a stale bar, issue #7)."""
+    result=_compact_response(url,_fetch(url))
+    _cache_put(key,result,ttl)
+    return result
+
+
 def _cached(key, url, ttl=21600):
     result=_cache_get(key)
     if result is None:
@@ -355,6 +362,15 @@ def parse_history(payload,code,as_of):
         closes=(indicators.get('quote') or [{}])[0].get('close') or []
         rows=[(datetime.fromtimestamp(ts,ZONES['US']).date().isoformat(),adj[i] if i<len(adj) else None,
                 closes[i] if i<len(closes) else None) for i,ts in enumerate(result.get('timestamp',[]))]
+        # The daily series can lag the session that just closed while the quote
+        # already holds its final price; on the newest bar the adjusted and actual
+        # close are the same. Use it only for the completed session's date (issue #7).
+        price,stamp=meta.get('regularMarketPrice'),meta.get('regularMarketTime')
+        if finite(price) and price>0 and finite(stamp):
+            moment=datetime.fromtimestamp(stamp,ZONES['US'])
+            if (moment.date().isoformat()==cutoff and moment.hour>=16
+                    and cutoff not in {day for day,_,_ in rows}):
+                rows.append((cutoff,price,price))
     for day,value,unadjusted in rows:
         try:
             day=date.fromisoformat(day).isoformat()
@@ -582,8 +598,12 @@ def _collect(spec,as_of):
             or quote_identity[75]!='HKD' or quote_identity[1]!=spec['name']):
             raise ValueError('港股报价证券代码、名称与交易币种未核验一致')
     histories=parse_history(history_payload,code,as_of)
+    if (len(histories)<2 or histories[-1]['date']!=cutoff) and market=='US':
+        # A response cached right after the close may predate that day's bar.
+        history_payload=json.loads(_refetch('history:'+code+':'+str(cutoff),url))
+        histories=parse_history(history_payload,code,as_of)
     if len(histories)<2 or histories[-1]['date']!=cutoff:
-        raise ValueError('海外样本日线未覆盖最近已完成交易日')
+        raise ValueError('海外样本日线未覆盖最近已完成交易日（'+str(cutoff)+'）')
     last,prev=histories[-1],histories[-2]
     source_history='leader_history:'+code
     adjustment=histories[-1].get('adjustment')

@@ -82,6 +82,31 @@ def safe_url(value):
         return None
 
 
+OFFICIAL_HOSTS = {'cpi':'www.stats.gov.cn', 'ppi':'www.stats.gov.cn', 'credit':'www.pbc.gov.cn'}
+SOURCE_IDS = {'cpi':'macro:nbs_cpi', 'ppi':'macro:nbs_ppi', 'credit':'macro:pbc_credit'}
+
+
+def official_release(report, kind, now, fields):
+    """One verified official release (issue #7), or None. Values are read, never estimated."""
+    item = ((report.get('strategy') or {}).get('long_wave_evidence') or {}).get(kind) or {}
+    source = next((s for s in (report.get('snapshot') or {}).get('sources', [])
+                   if s.get('id') == SOURCE_IDS[kind]), {})
+    values = item.get('values') or {}
+    url = safe_url(item.get('url'))
+    ok = (item.get('status') == 'ok' and source.get('status') in ('ok', 'partial')
+          and fresh(item.get('published_at'), now, 62)
+          and source.get('as_of') == item.get('published_at') and source.get('url') == item.get('url')
+          and url is not None and urlsplit(url).hostname == OFFICIAL_HOSTS[kind]
+          and isinstance(item.get('period'), str)
+          and all(finite(values.get(k)) and -100 <= values[k] <= 1000 for k in fields))
+    return {**item, 'url':url} if ok else None
+
+
+def _period(item):
+    year, month = str(item.get('period'))[:7].split('-')
+    return '%s 年 %d 月' % (year, int(month))
+
+
 def macro_signals(report, now):
     macro = (report.get('strategy') or {}).get('macro_evidence') or {}
     source = next((s for s in (report.get('snapshot') or {}).get('sources', [])
@@ -120,13 +145,52 @@ def macro_signals(report, now):
          'as_of':liquidity.get('as_of') if funding_ok else None,
          'source_name':'人民币隔夜 Shibor · 既有数据接口', 'url':'https://www.shibor.org/',
          'scope':'仅代表人民币短端资金价格，非完整流动性或全球实际利率。'},
-        {'id':'inflation', 'title':'通胀与实际利率', 'status':'missing', 'value':None,
-         'detail':'CPI、PPI与实际利率的长期序列尚未接入。'},
-        {'id':'credit', 'title':'信用与债务', 'status':'missing', 'value':None,
-         'detail':'社融、债务负担与信用脉冲的长期序列尚未接入。'},
+        inflation_signal(report, now, liquidity if funding_ok else None),
+        credit_signal(report, now),
         {'id':'productivity', 'title':'生产率与投资', 'status':'missing', 'value':None,
-         'detail':'生产率、研发与资本开支的长期序列尚未接入。'},
+         'detail':'待接入：生产率、研发与资本开支尚无可核验的官方月度口径，不用估计值填补。',
+         'scope':'取得官方口径前不参与情景判断。'},
     ]
+
+
+def inflation_signal(report, now, liquidity):
+    cpi = official_release(report, 'cpi', now, ('cpi_yoy',))
+    ppi = official_release(report, 'ppi', now, ('ppi_yoy', 'purchase_yoy'))
+    if not cpi or not ppi:
+        missing = '、'.join(n for n, v in (('CPI', cpi), ('PPI', ppi)) if not v)
+        return {'id':'inflation', 'title':'通胀与实际利率', 'status':'missing', 'value':None,
+                'detail':'等待国家统计局 ' + missing + ' 公告及发布日期核验。',
+                'scope':'月度价格观察，不能确定长期周期阶段。'}
+    detail = ('PPI 同比 %+.1f%%，工业生产者购进价格同比 %+.1f%%（%s）。'
+              % (ppi['values']['ppi_yoy'], ppi['values']['purchase_yoy'], _period(ppi)))
+    if liquidity:
+        # A rough short-end real rate: overnight Shibor minus CPI YoY. Stated, not hidden.
+        detail += ('隔夜 Shibor 减 CPI 同比约 %+.2f 个百分点，仅为短端粗略实际利率。'
+                   % (liquidity['annual_rate_pct'] - cpi['values']['cpi_yoy']))
+    return {'id':'inflation', 'title':'通胀与实际利率', 'status':'ready',
+            'value':cpi['values']['cpi_yoy'], 'unit':'% · CPI 同比', 'signed':True,
+            'detail':detail, 'period':cpi['period'], 'as_of':cpi['published_at'],
+            'source_name':'国家统计局 · ' + str(cpi.get('title') or 'CPI') + '；' + str(ppi.get('title') or 'PPI'),
+            'url':cpi['url'], 'related':[{'title':str(ppi.get('title') or 'PPI'), 'url':ppi['url'], 'as_of':ppi['published_at']}],
+            'scope':'统计期 %s，发布于 %s；全国月度同比，不是长期通胀趋势，也不是长期实际利率。'
+                    % (_period(cpi), str(cpi['published_at'])[:10])}
+
+
+def credit_signal(report, now):
+    credit = official_release(report, 'credit', now, ('social_financing_yoy', 'social_financing_stock', 'm2_yoy', 'm2_balance'))
+    if not credit:
+        return {'id':'credit', 'title':'信用与债务', 'status':'missing', 'value':None,
+                'detail':'等待中国人民银行金融统计数据报告及发布日期核验。',
+                'scope':'信用总量观察，不能确定长期周期阶段。'}
+    v = credit['values']
+    return {'id':'credit', 'title':'信用与债务', 'status':'ready',
+            'value':v['social_financing_yoy'], 'unit':'% · 社融存量同比', 'signed':True,
+            'detail':('%s末社会融资规模存量 %.2f 万亿元；M2 余额 %.2f 万亿元，同比 %+.1f%%。'
+                      % (_period(credit), v['social_financing_stock'], v['m2_balance'], v['m2_yoy'])),
+            'period':credit['period'], 'as_of':credit['published_at'],
+            'source_name':'中国人民银行 · ' + str(credit.get('title') or '金融统计数据报告'), 'url':credit['url'],
+            'scope':'统计期 %s，发布于 %s；月末存量增速，不含债务负担、偿债能力或信用利差。'
+                    % (_period(credit), str(credit['published_at'])[:10])}
 
 
 def sector_evidence(sector, watched, now, report=None, scarcity_profiles=None):
@@ -183,6 +247,7 @@ def project_cycle(accounts, user_id, report, now=None, *, report_stale=False):
         demand, change = signals[0]['value'], signals[1]['change_bp']
         scenario = ('repair' if demand >= 50 else 'transition') if change <= -5 else (
             ('friction' if demand >= 50 else 'pressure') if change >= 5 else 'mixed')
+    phase = phase_for(signals)
     watched = set(accounts.watchlist(user_id))
     sectors = {s['id']:s for s in evidence_report.get('sector_analysis', []) if isinstance(s, dict) and isinstance(s.get('id'), str)}
     scarcity_profiles=profiles_for(evidence_report,now)
@@ -193,7 +258,7 @@ def project_cycle(accounts, user_id, report, now=None, *, report_stale=False):
                        'thesis':thesis, 'next_checks':checks, 'risks':risks, 'sectors':items,
                        'watch_count':sum(s['watched'] for s in items),
                        'evidence_count':sum(s['status']=='ready' for s in items)})
-    return {**result, 'status':'ready' if valid_report else 'awaiting_report',
+    return {**result, **phase, 'status':'ready' if valid_report else 'awaiting_report',
             'as_of':report.get('as_of') if valid_report else None,
             'signals':signals, 'coverage':sum(s['status']=='ready' for s in signals),
             'coverage_total':len(signals), 'current_scenario':scenario,
@@ -205,4 +270,20 @@ def project_cycle(accounts, user_id, report, now=None, *, report_stale=False):
             'references':[
                 {'title':'Kondratieff · The Long Waves in Economic Life（1935）',
                  'url':'https://doi.org/10.2307/1928486', 'scope':'长波研究的原始文献线索；并非当前市场阶段的证据。'},
-                {'title':'当前数据口径', 'scope':'PMI和Shibor来源与日期见上方；主题对应关系和情景阈值为本站研究设计，未经策略回测。'}]}
+                {'title':'当前数据口径', 'scope':'PMI、Shibor、CPI、PPI 与社融的来源和日期见上方；主题对应关系和情景阈值为本站研究设计，未经策略回测。'}]}
+
+
+def phase_for(signals):
+    """The long-wave phase stays unverified until all five evidence groups are verified (issue #7)."""
+    ready = [s for s in signals if s['status'] == 'ready']
+    missing = [s['title'] for s in signals if s['status'] != 'ready']
+    if missing:
+        return {'phase':'unverified', 'phase_label':'长期阶段待验证',
+                'phase_detail':'已核验 %d/%d 组证据，缺少：%s。证据不足 %d 组时不判定康波阶段，'
+                               '短期景气与资金数据只描述当前环境。' % (len(ready), len(signals), '、'.join(missing), len(signals)),
+                'phase_basis':[]}
+    return {'phase':'conditional', 'phase_label':'有条件的周期情景',
+            'phase_detail':'%d 组证据均已核验。情景只在下列数据日期和口径成立，任一数据更新或失效即需重新核验；'
+                           '不是康波阶段定论，不代表收益概率，不构成投资建议。' % len(signals),
+            'phase_basis':[{'id':s['id'], 'title':s['title'], 'as_of':s.get('as_of'), 'period':s.get('period'),
+                            'scope':s.get('scope')} for s in ready]}

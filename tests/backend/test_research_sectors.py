@@ -161,6 +161,7 @@ class SectorResearchTests(unittest.TestCase):
     @patch('research_overseas.collect_overseas_references', lambda *_: ([], [], {}))
     @patch('research_reference_fallbacks.collect_money_reference', lambda *_: ([], [], {}))
     @patch('research_sectors.collect_macro_risk', lambda *_: ({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'}))
+    @patch('research_sectors.collect_long_wave_evidence', lambda *_: ({}, []))
     @patch('research_sectors.collect_verified_references', lambda *_: ([], [], {}))
     @patch('research_sectors.fetch_text', return_value='')
     @patch('research_sectors.collect_sector_quotes', return_value=([], []))
@@ -190,6 +191,7 @@ class SectorResearchTests(unittest.TestCase):
                  patch.object(sectors, 'collect_sector_quotes', return_value=([], [])), \
                  patch.object(sectors, 'collect_verified_references', return_value=([], [], {})), \
                  patch.object(sectors, 'collect_macro_risk', return_value=({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'})), \
+                 patch.object(sectors, 'collect_long_wave_evidence', return_value=({}, [])), \
              patch.object(sectors, 'fetch_text', return_value=''), \
                  patch.object(sectors, 'match_sector_quotes', return_value={board['id']: quote()}), \
                  patch.object(sectors, 'collect_sector_histories', return_value=({'90.BKTEST': history()}, [])), \
@@ -236,6 +238,7 @@ class SectorResearchTests(unittest.TestCase):
              patch.object(sectors, 'collect_sector_quotes', return_value=([], [])), \
              patch.object(sectors, 'collect_verified_references', return_value=([], [], {})), \
              patch.object(sectors, 'collect_macro_risk', return_value=({'status': 'unavailable', 'risk_score': None}, {'id': 'macro:nbs_pmi', 'status': 'error'})), \
+             patch.object(sectors, 'collect_long_wave_evidence', return_value=({}, [])), \
              patch.object(sectors, 'fetch_text', return_value=''), \
              patch.object(sectors, 'collect_sector_histories', return_value=({}, [])), \
              patch('research_tushare.gather_sector_company_evidence', return_value={'sector_leaders': {}, 'sources': failures, 'warnings': []}), \

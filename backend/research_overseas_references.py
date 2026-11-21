@@ -30,6 +30,10 @@ REFERENCES = {
     'official':'https://www.niftyindices.com/indices/equity/broad-based-indices/NIFTY-50','scope':'印度NIFTY 50股票价格参考，不代表全部印度上市公司；不含公司财务及未评估事件。'},
  'overseas_vn_equity': {'symbol':'^VNINDEX.VN','name':'越南VNINDEX指数','tokens':['VNINDEX'],'currency':'VND','zone':'Asia/Bangkok','market':'VN',
     'official':'https://www.hsx.vn/','scope':'越南胡志明交易所VNINDEX股票价格参考，不代表河内交易所或全部越南市场；不含公司财务及未评估事件。'},
+ 'overseas_healthcare': {'symbol':'XLV','name':'美国医疗保健行业ETF（XLV）','tokens':['Health Care','Select Sector'],'currency':'USD','zone':'America/New_York','market':'US',
+    'instrument':'ETF','asset_type':'equity_fund','unit':'price',
+    'official':'https://www.ssga.com/us/en/intermediary/etfs/the-health-care-select-sector-spdr-fund-xlv',
+    'scope':'跟踪标普500医疗保健成分股的ETF价格，仅覆盖美国大型医疗保健公司，不代表全球或港股医药；为基金价格而非指数点位，含管理费拖累，不含股息、公司财务及未评估事件。公司样本指标核验完整时以公司样本为准。'},
  'reference_tw_equity': {'symbol':'^TWII','name':'台湾加权股票指数','tokens':['TSEC','CAPITALIZATION','WEIGHTED'],'currency':'TWD','zone':'Asia/Taipei','market':'TW',
     'official':'https://www.twse.com.tw/en/indices/taiex/mi-5mins-hist.html','scope':'台湾加权股票价格指数，仅作为有限地区组合的市场观察。'},
  'reference_br_equity': {'symbol':'^BVSP','name':'巴西IBOVESPA指数','tokens':['IBOVESPA'],'currency':'BRL','zone':'America/Sao_Paulo','market':'BR',
@@ -43,6 +47,8 @@ COMPOSITES = {
     'scope':'美国大型股、欧元区大型股、日本、印度、澳大利亚五地指数的有限市场样本；不是官方全球指数，不覆盖全部国家。各本币价格收益等权，不含汇率、股息、公司财务或未评估事件。'},
  'overseas_asia_pacific': {'name':'亚太·五地市场样本指标','members':['overseas_jp_equity','overseas_in_equity','reference_tw_equity','reference_au_equity','overseas_hang_seng'],
     'scope':'日本、印度、台湾、澳大利亚及香港五地股票指数的有限亚太市场样本；不覆盖全部亚太国家或全部股票。各本币价格收益等权，不含汇率、股息、公司财务或未评估事件。'},
+ 'overseas_us_equity': {'name':'美股·标普500与纳斯达克参考指标','members':['overseas_sp500','overseas_nasdaq'],
+    'scope':'标普500与纳斯达克综合两项美国股票价格指数的等权参考；不代表全部美股，不含公司财务、股息或未评估事件。公司样本指标核验完整时以公司样本为准。'},
  'overseas_em_equity': {'name':'新兴市场·三地市场样本指标','members':['overseas_in_equity','reference_tw_equity','reference_br_equity'],
     'scope':'印度、台湾及巴西三地股票指数的有限新兴市场样本；不是MSCI新兴市场指数，不代表全部新兴国家。各本币价格收益等权，不含汇率、股息、公司财务或未评估事件。'},
 }
@@ -73,7 +79,13 @@ def reference_quote_fresh(quote,as_of):
    return str(day)==last_complete_session(quote['market'],as_of)
   # Native holidays beyond the collected session have not been established.
   # Invalidate once another weekday's closing boundary has passed.
-  next_day=day+timedelta(days=1)
+  # When the source, observed after that session's close, still named it as the
+  # current session, no newer local session had opened (e.g. a Brazilian holiday
+  # on a weekday). Count the next weekday from the observation, not the bar.
+  anchor=day
+  if close.date()==day and observed>=close:
+   anchor=max(day,observed.date())
+  next_day=anchor+timedelta(days=1)
   while next_day.weekday()>=5:next_day+=timedelta(days=1)
   next_close=datetime.combine(next_day,close.timetz().replace(tzinfo=None),zone)+timedelta(minutes=15)
   return day<=now.date() and now<next_close and (now.date()-day).days<=4
@@ -96,7 +108,7 @@ def parse_index(payload,spec,as_of):
  # it: retain only index-point returns and expose the missing currency field.
  missing_euro_currency=(spec['symbol']=='^STOXX50E' and meta.get('currency') is None
                         and meta.get('exchangeName')=='ZRH')
- if (meta.get('symbol')!=spec['symbol'] or meta.get('instrumentType')!='INDEX'
+ if (meta.get('symbol')!=spec['symbol'] or meta.get('instrumentType')!=spec.get('instrument','INDEX')
      or (meta.get('currency')!=spec['currency'] and not missing_euro_currency) or meta.get('exchangeTimezoneName')!=spec['zone']
      or not all(token.casefold() in visible for token in spec['tokens'])):
   raise ValueError('指数代码、名称、类型、币种或当地时区不符')
@@ -121,12 +133,22 @@ def parse_index(payload,spec,as_of):
   if not finite(stamp) or not finite(value) or value<=0:continue
   day=datetime.fromtimestamp(stamp,zone).date()
   if day<=cutoff and day.weekday()<5:rows[day.isoformat()]={'date':day.isoformat(),'close':float(value)}
+ # The daily series can lag the session that just closed while the same response
+ # already carries that session's final price. Take it only when the quote time
+ # falls on that session's date at or after its close (issue #7).
+ session_day=close_time.date()
+ price=meta.get('regularMarketPrice')
+ if (local_now>=close_time+timedelta(minutes=15) and session_day.isoformat() not in rows
+     and published.date()==session_day and published>=close_time and finite(price) and price>0
+     and session_day.weekday()<5):
+  rows[session_day.isoformat()]={'date':session_day.isoformat(),'close':float(price)}
+  meta=dict(meta,_close_from_quote=session_day.isoformat())
  history=[rows[d] for d in sorted(rows)][-121:]
  if len(history)<61:raise ValueError('当地指数不足61个已完成日线点')
  if (local_now.date()-datetime.fromisoformat(history[-1]['date']).date()).days>7:
   raise ValueError('当地指数最近日线过期')
  if local_now>=close_time+timedelta(minutes=15) and history[-1]['date']!=str(close_time.date()):
-  raise ValueError('来源会话已结束但缺少对应收盘日线')
+  raise ValueError('来源会话已结束但缺少对应收盘日线（'+str(close_time.date())+'）')
  return history,meta
 
 def _source(identity,spec,as_of,status='ok',count=0,error='',url=None,provider=None):
@@ -220,20 +242,29 @@ def _collect(identity,as_of):
   provider='VNDIRECT';currency=None
   session_end=datetime.combine(datetime.fromisoformat(history[-1]['date']).date(),time(15),ZoneInfo(spec['zone'])).isoformat()
  else:
-  payload=json.loads(_cached('reference:'+spec['symbol']+':'+stamp,url,3600))
-  history,meta=parse_index(payload,spec,as_of)
+  key='reference:'+spec['symbol']+':'+stamp
+  payload=json.loads(_cached(key,url,3600))
+  try:
+   history,meta=parse_index(payload,spec,as_of)
+  except ValueError as error:
+   # A response cached right after the close may predate that day's bar.
+   if '缺少对应收盘日线' not in str(error):raise
+   from research_overseas import _refetch
+   history,meta=parse_index(json.loads(_refetch(key,url,3600)),spec,as_of)
   currency=meta.get('currency')
   session_end=datetime.fromtimestamp(meta['currentTradingPeriod']['regular']['end'],ZoneInfo(spec['zone'])).isoformat()
  source_id='overseas_reference:'+identity;history_id='reference:overseas:'+identity
  when=history[-1]['date'];last,prev=history[-1]['close'],history[-2]['close']
  q={'board_id':identity,'sector_id':identity,'code':spec['symbol'],'name':spec['name'],'full_name':spec['name'],
    'last':last,'change_pct':(last/prev-1)*100,'as_of':when,'as_of_precision':'date','data_frequency':'daily',
-   'source_id':source_id,'source_url':url,'history_secid':history_id,'asset_type':'equity_index',
-   'return_type':'price','market':spec['market'],'currency':currency,'unit':'index_points','score_scope':'reference_trend',
+   'source_id':source_id,'source_url':url,'history_secid':history_id,'asset_type':spec.get('asset_type','equity_index'),
+   'return_type':'price','market':spec['market'],'currency':currency,'unit':spec.get('unit','index_points'),'score_scope':'reference_trend',
    'official_url':spec['official'],'scope_note':spec['scope'],
    'reference_timezone':spec['zone'],'reference_session_completed':True,
    'reference_observed_at':as_of,'reference_latest_completed_date':when,'reference_session_end':session_end,
    'mapping_basis':'明确代码、名称、指数类型、币种与当地时区均核验：'+spec['name']}
+ if meta.get('_close_from_quote'):
+  q['scope_note']+=' '+meta['_close_from_quote']+' 收盘取自同一来源的收盘报价（日线序列尚未更新）。'
  if currency is None:
   q['scope_note']+=' 来源未提供报价币种，仅作指数点位变化，不做汇率或金额换算。'
   q['mapping_basis']='已核验代码、名称、指数类型与当地时区；报价币种未提供：'+spec['name']
@@ -246,7 +277,7 @@ def collect_overseas_references(catalog,as_of):
  requested={r['id'] for r in catalog}
  composites={key:spec for key,spec in COMPOSITES.items() if key in requested}
  keys=(requested & REFERENCES.keys())|{key for spec in composites.values() for key in spec['members']}
- quotes=[];sources=[];histories={};found={}
+ quotes=[];sources=[];histories={};found={};failures={}
  with ThreadPoolExecutor(max_workers=4) as pool:
   futures={pool.submit(_collect,key,as_of):key for key in keys}
   for future in as_completed(futures):
@@ -256,14 +287,16 @@ def collect_overseas_references(catalog,as_of):
     if key in requested:quotes.append(q)
    except Exception as e:
     from research_transport import source_error
-    sources.append(_source('overseas_reference:'+key,REFERENCES[key],None,'error',0,
-        source_error(e,'海外指数日线未取得')))
+    failures[key]=source_error(e,'海外指数日线未取得')
+    sources.append(_source('overseas_reference:'+key,REFERENCES[key],None,'error',0,failures[key]))
  for identity,spec in composites.items():
   missing=[key for key in spec['members'] if key not in found]
   sid='overseas_reference:'+identity;hid='reference:overseas:'+identity
   if missing:
    sources.append({'id':sid,'name':spec['name'],'url':None,'status':'error','as_of':None,'count':0,
-      'fetched_at':now_iso(),'scope':spec['scope'],'error':'指定市场日线未齐：'+','.join(missing)})
+      'fetched_at':now_iso(),'scope':spec['scope'],
+      'error':'成员市场日线未齐，不拼凑组合：缺少'+'；'.join(
+          REFERENCES[key]['name']+'（'+str(failures.get(key) or '未取得')[:80]+'）' for key in missing)})
    continue
   windows=[{r['date']:r['close'] for r in found[key][1]} for key in spec['members']]
   days=sorted(set.intersection(*(set(h) for h in windows)))
@@ -276,7 +309,9 @@ def collect_overseas_references(catalog,as_of):
    if i:value*=sum(h[day]/h[days[i-1]] for h in windows)/len(windows)
    series.append({'date':day,'close':value})
   histories[hid]=series;last=series[-1]
-  notes=spec['scope']+' 市场收盘时区不同，使用共同日期，不代表同一瞬时可交易价格。'
+  notes=spec['scope']
+  if len({REFERENCES[key]['zone'] for key in spec['members']})>1:
+   notes+=' 市场收盘时区不同，使用共同日期，不代表同一瞬时可交易价格。'
   if any(found[key][0].get('currency') is None for key in spec['members']):
    notes+=' 部分来源未提供报价币种，组合只汇总指数点位比例，不进行跨币种金额或汇率换算。'
   quotes.append({'board_id':identity,'sector_id':identity,'code':'markets:'+identity,'name':spec['name'],

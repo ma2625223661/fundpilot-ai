@@ -75,7 +75,7 @@ class ConvertibleResearchTests(unittest.TestCase):
              patch.object(sectors, 'collect_sector_market', return_value={'market': [], 'news': [], 'sources': [], 'warnings': []}), \
              patch.object(sectors, 'collect_sector_quotes', return_value=([], [])), \
              patch.object(sectors, 'collect_verified_references', return_value=([quote()], [source], {'official:csindex:000832': history()})), \
-             patch.object(sectors, 'collect_macro_risk', return_value=({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'})), \
+             patch.object(sectors, 'collect_macro_risk', return_value=({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'})),              patch.object(sectors, 'collect_long_wave_evidence', return_value=({}, [])), \
              patch.object(sectors, 'fetch_text', return_value=''), \
              patch.object(sectors, 'collect_sector_histories', return_value=({}, [])), \
              patch('research_tushare.gather_sector_company_evidence', return_value={'sector_leaders': {}, 'sources': [], 'warnings': []}), \
