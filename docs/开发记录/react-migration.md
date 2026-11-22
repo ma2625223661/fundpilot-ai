@@ -525,6 +525,20 @@
 
 测试：后端新增 `tests/backend/test_long_wave_evidence.py`（12 项），并给 7 个调用整份研究的测试补上新采集函数的替身（否则会联网并写入真实 `data/`）；组件测试新增 `cycle.test.tsx`。
 
+## Issue #10：康波第 5 组、来源 ID 膨胀、组件测试、采集失败（2026-11-22）
+
+1. 康波「生产率与投资」：接入国家统计局固定资产投资（累计同比、制造业、知识产权产品，高技术产业仅在公告给出时显示）、规模以上工业增加值（当月与累计）、年度统计公报（全员劳动生产率、R&D 经费及强度，标明每年约 2 月底更新一次）。五组齐全后页面给出「有条件的周期情景」并列出每组日期。口径见 `docs/研究方法/long-wave-research.md`。
+2. 来源 ID 不再无限追加 `:retained`（`research_evidence_resilience.py`）：沿用时从原始 ID 计算，后缀最多一个；只沿用状态正常的旧来源，旧的失败记录不再一轮轮复制。加载旧报告时用 `collapse_retained()` 折叠已有的嵌套 ID 并去重（本地报告从 16.4 MB 降到 13.5 MB，来源从 2244 条降到 1869 条）。
+3. 组件测试：较新的 Node 自带 `localStorage` 全局变量，会遮住 jsdom 的实现（未设 `--localstorage-file` 时为 undefined 或报错）。`tests/components/setup.ts` 改为给每次测试提供同一个内存版 `localStorage` / `sessionStorage`，与 Node 版本无关。用 `NODE_OPTIONS=--experimental-webstorage` 复现并验证。
+4. 采集失败：
+   - 行业、概念行情榜：接口格式未变（2026-11-22 核对），失败是连接问题。主地址失败时改用同一发布方的备用地址 `82.push2.eastmoney.com`；错误信息区分「连接失败」与「格式变化」。
+   - 海外日线 403：Stooq 现在返回 JavaScript 人机验证页，不能作为数据源；改为 Yahoo `query1` 失败时用 `query2` 重试一次（同一数据、同一格式）。没有混用腾讯美股日线，因为两者复权口径不同。
+   - 中证成分工作簿 403：官方 OSS 镜像同样 403，没有第二个官方地址；改为遇到 403/429/5xx 等 2 秒重试一次，仍失败则沿用原有的「最近有效快照」逻辑。
+   - 公司日线与公司数据：上一轮失败或超时的公司记在缓存里（3 天），下一轮排在最前面请求，不再等预算排到。
+5. 第 5 项建议（FRED、世界银行、中债曲线、SEC EDGAR、期货价格）本轮未做。
+
+测试：后端新增 `tests/backend/test_issue10_fixes.py`，`test_long_wave_evidence.py` 增加生产率三类公告的解析与采集用例。
+
 ## 必须遵守的约束
 
 - 后端 CSP 是 `script-src 'self'`：不得使用 CDN、外部字体、内联脚本。

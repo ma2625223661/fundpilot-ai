@@ -82,11 +82,13 @@ def safe_url(value):
         return None
 
 
-OFFICIAL_HOSTS = {'cpi':'www.stats.gov.cn', 'ppi':'www.stats.gov.cn', 'credit':'www.pbc.gov.cn'}
-SOURCE_IDS = {'cpi':'macro:nbs_cpi', 'ppi':'macro:nbs_ppi', 'credit':'macro:pbc_credit'}
+OFFICIAL_HOSTS = {'cpi':'www.stats.gov.cn', 'ppi':'www.stats.gov.cn', 'credit':'www.pbc.gov.cn',
+                  'fai':'www.stats.gov.cn', 'industry':'www.stats.gov.cn', 'annual':'www.stats.gov.cn'}
+SOURCE_IDS = {'cpi':'macro:nbs_cpi', 'ppi':'macro:nbs_ppi', 'credit':'macro:pbc_credit',
+              'fai':'macro:nbs_fai', 'industry':'macro:nbs_industry', 'annual':'macro:nbs_annual'}
 
 
-def official_release(report, kind, now, fields):
+def official_release(report, kind, now, fields, max_days=62):
     """One verified official release (issue #7), or None. Values are read, never estimated."""
     item = ((report.get('strategy') or {}).get('long_wave_evidence') or {}).get(kind) or {}
     source = next((s for s in (report.get('snapshot') or {}).get('sources', [])
@@ -94,16 +96,19 @@ def official_release(report, kind, now, fields):
     values = item.get('values') or {}
     url = safe_url(item.get('url'))
     ok = (item.get('status') == 'ok' and source.get('status') in ('ok', 'partial')
-          and fresh(item.get('published_at'), now, 62)
+          and fresh(item.get('published_at'), now, max_days)
           and source.get('as_of') == item.get('published_at') and source.get('url') == item.get('url')
           and url is not None and urlsplit(url).hostname == OFFICIAL_HOSTS[kind]
           and isinstance(item.get('period'), str)
-          and all(finite(values.get(k)) and -100 <= values[k] <= 1000 for k in fields))
+          and all(finite(values.get(k)) and -1e7 < values[k] < 1e7 for k in fields))
     return {**item, 'url':url} if ok else None
 
 
 def _period(item):
-    year, month = str(item.get('period'))[:7].split('-')
+    period = str(item.get('period'))
+    if '-' not in period:
+        return '%s 年' % period
+    year, month = period[:7].split('-')
     return '%s 年 %d 月' % (year, int(month))
 
 
@@ -147,10 +152,49 @@ def macro_signals(report, now):
          'scope':'仅代表人民币短端资金价格，非完整流动性或全球实际利率。'},
         inflation_signal(report, now, liquidity if funding_ok else None),
         credit_signal(report, now),
-        {'id':'productivity', 'title':'生产率与投资', 'status':'missing', 'value':None,
-         'detail':'待接入：生产率、研发与资本开支尚无可核验的官方月度口径，不用估计值填补。',
-         'scope':'取得官方口径前不参与情景判断。'},
+        productivity_signal(report, now),
     ]
+
+
+def productivity_signal(report, now):
+    """Investment and output monthly, labour productivity and R&D yearly (issue #10)."""
+    fai = official_release(report, 'fai', now, ('fai_yoy', 'manufacturing_yoy'))
+    industry = official_release(report, 'industry', now, ('value_added_yoy',))
+    annual = official_release(report, 'annual', now,
+                              ('labour_productivity', 'labour_productivity_growth', 'rd_spending', 'rd_growth', 'rd_intensity'),
+                              max_days=460)
+    if not fai or not industry:
+        missing = '、'.join(n for n, v in (('固定资产投资', fai), ('规模以上工业增加值', industry)) if not v)
+        return {'id':'productivity', 'title':'生产率与投资', 'status':'missing', 'value':None,
+                'detail':'等待国家统计局' + missing + '公告及发布日期核验；不用估计值填补。',
+                'scope':'月度投资与工业产出观察，不能确定长期周期阶段。'}
+    f, i = fai['values'], industry['values']
+    parts = ['制造业投资累计同比 %+.1f%%' % f['manufacturing_yoy']]
+    if finite(f.get('intellectual_property_yoy')):
+        parts.append('知识产权产品投资 %+.1f%%' % f['intellectual_property_yoy'])
+    if finite(f.get('high_tech_yoy')):
+        parts.append('高技术产业投资 %+.1f%%' % f['high_tech_yoy'])
+    detail = '，'.join(parts) + '（%s）。规模以上工业增加值当月同比 %+.1f%%' % (_period(fai), i['value_added_yoy'])
+    if finite(i.get('value_added_ytd_yoy')):
+        detail += '，年初累计 %+.1f%%' % i['value_added_ytd_yoy']
+    detail += '（%s）。' % _period(industry)
+    related = [{'title':str(industry.get('title') or '规模以上工业增加值'), 'url':industry['url'], 'as_of':industry['published_at']}]
+    if annual:
+        a = annual['values']
+        detail += ('%s全员劳动生产率 %s 元/人（%+.1f%%），R&D 经费 %s 亿元（%+.1f%%），占 GDP %.2f%%；'
+                   '年度数据，每年约 2 月底更新一次。'
+                   % (_period(annual), format(round(a['labour_productivity']), ','), a['labour_productivity_growth'],
+                      format(round(a['rd_spending']), ','), a['rd_growth'], a['rd_intensity']))
+        related.append({'title':str(annual.get('title') or '统计公报'), 'url':annual['url'], 'as_of':annual['published_at']})
+    else:
+        detail += '年度全员劳动生产率与 R&D 经费待统计公报核验。'
+    return {'id':'productivity', 'title':'生产率与投资', 'status':'ready',
+            'value':f['fai_yoy'], 'unit':'% · 固定资产投资累计同比', 'signed':True,
+            'detail':detail, 'period':fai['period'], 'as_of':fai['published_at'],
+            'source_name':'国家统计局 · ' + str(fai.get('title') or '固定资产投资'),
+            'url':fai['url'], 'related':related,
+            'scope':'统计期 %s，发布于 %s；月度投资与工业产出、年度生产率与研发，均为官方口径，'
+                    '不是全要素生产率，也不能单独确定长期周期阶段。' % (_period(fai), str(fai['published_at'])[:10])}
 
 
 def inflation_signal(report, now, liquidity):

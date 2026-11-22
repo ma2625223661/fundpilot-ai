@@ -109,6 +109,9 @@ def collect_leader_histories(company, as_of):
         fetched_at = cached.get('original_fetched_at') if isinstance(cached, dict) else None
         return rows or [], fetched_at or _fetched_at(key), '', provider, url, metadata
 
+    from research_public_data import retry_first, remember_failures
+    # Histories that failed or timed out last round are requested first (issue #10).
+    codes = retry_first('leader_history', codes)
     pool = ThreadPoolExecutor(max_workers=12)
     futures = {pool.submit(fetch, code): code for code in codes}
     result = {}
@@ -180,6 +183,8 @@ def collect_leader_histories(company, as_of):
                     {'rows': rows, 'provider': 'sina_bj', 'url': fallback['url'], 'metadata': metadata}, 8*86400)
             elif fallback.get('error'):
                 result[code] = (*original[:2], original[2] + '；' + fallback['error'], *original[3:])
+    remember_failures('leader_history', [code for code, item in result.items()
+                                         if not (item[0] and item[0][-1]['date'] == cutoff)])
     for code, (rows, fetched_at, error, provider, url, metadata) in result.items():
         fresh = bool(rows and rows[-1]['date'] == cutoff)
         name = '新浪财经' if provider == 'sina_bj' else 'BaoStock' if provider == 'baostock' else '腾讯财经'

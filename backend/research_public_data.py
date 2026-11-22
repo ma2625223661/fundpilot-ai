@@ -14,6 +14,7 @@ import os
 import re
 import threading
 import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -26,6 +27,7 @@ from research_sector_references import VERIFIED_REFERENCES
 
 PROVIDER = 'public_multisource'
 MEMBER_BASE = 'https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/'
+MEMBER_RETRY_SECONDS = 2
 FINANCE_BASE = 'https://datacenter-web.eastmoney.com/api/data/v1/get'
 CACHE_PATH = Path(__file__).resolve().parent.parent / 'data' / 'public-company-cache.json'
 MEMBER_CACHE_PATH = Path(__file__).resolve().parent.parent / 'data' / 'csi-members-last-good.json'
@@ -206,7 +208,15 @@ def fetch_members(reference, as_of):
     url = MEMBER_BASE + reference['code'] + 'cons.xls'
     request = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 FundPilot/1.0'})
     try:
-        content = fetch_bytes(request, timeout=8, max_bytes=4_000_000)
+        try:
+            content = fetch_bytes(request, timeout=8, max_bytes=4_000_000)
+        except urllib.error.HTTPError as error:
+            # The CSI download CDN sometimes refuses one request (403/429/5xx)
+            # and serves the same file a moment later; retry once (issue #10).
+            if error.code not in (403, 429) and error.code < 500:
+                raise
+            time.sleep(MEMBER_RETRY_SECONDS)
+            content = fetch_bytes(request, timeout=8, max_bytes=4_000_000)
         fetched_at = now_iso()
         rows = import_member_workbook(content, reference, as_of, fetched_at, url)
         _set_member_fetch_status(reference['code'], 'network', fetched_at, attempted_at)
@@ -555,7 +565,25 @@ def fetch_financial(code, as_of):
     return parse_financial(payload, code, as_of)
 
 
-def _parallel(items, function, seconds, workers=6):
+RETRY_FIRST_TTL = 3 * 86400
+
+
+def retry_first(key, items):
+    """Items that failed or ran out of time last round go to the front (issue #10)."""
+    failed = set(_get('retry_first:' + key) or [])
+    return sorted(items, key=lambda item: 0 if item in failed else 1)
+
+
+def remember_failures(key, failed):
+    _remember('retry_first:' + key, sorted({str(item) for item in failed}), RETRY_FIRST_TTL)
+
+
+def _parallel(items, function, seconds, workers=6, retry_key=None):
+    """With a retry_key (string items only), last round's failures start first."""
+    items = list(items)
+    remember = bool(retry_key) and all(isinstance(item, str) for item in items)
+    if remember:
+        items = retry_first(retry_key, items)
     pool = ThreadPoolExecutor(max_workers=workers)
     futures = {pool.submit(function, item): item for item in items}
     results = {}
@@ -572,8 +600,10 @@ def _parallel(items, function, seconds, workers=6):
         for future, item in futures.items():
             if item not in results:
                 future.cancel()
-                results[item] = (None, '本轮采集预算用完，下轮继续')
+                results[item] = (None, '本轮采集预算用完，下轮优先重试')
         pool.shutdown(wait=False, cancel_futures=True)
+    if remember:
+        remember_failures(retry_key, [item for item, (value, error) in results.items() if error])
     return results
 
 
@@ -595,7 +625,8 @@ def gather_public_company_evidence(catalog, as_of):
     with _lock:
         for ref in references.values():
             _member_fetch_status.pop(ref['code'], None)
-    memberships = _parallel(list(references), lambda key: fetch_members(references[key], as_of), 12)
+    memberships = _parallel(list(references), lambda key: fetch_members(references[key], as_of), 12,
+                            retry_key='members')
     codes = set()
     for identity, (members, error) in memberships.items():
         ref = references[identity]
@@ -644,7 +675,7 @@ def gather_public_company_evidence(catalog, as_of):
             'quoted_count': len(rows), 'order': 'smallest_market_cap' if smallest else 'largest_market_cap',
             'verified_member_codes': [r['ts_code'] for r in members or []]}
     fin_codes = fair_codes(selected)
-    finances = _parallel(fin_codes, lambda c: fetch_financial(c, as_of), 60, workers=12)
+    finances = _parallel(fin_codes, lambda c: fetch_financial(c, as_of), 60, workers=12, retry_key='financial')
     for code, (fin, error) in finances.items():
         result['sources'].append(_source('financial:' + code, '东方财富 · 公司财务指标', finance_url(code),
             'ok' if fin else 'error' if error else 'partial', 1 if fin else 0,

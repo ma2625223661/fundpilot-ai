@@ -4,8 +4,11 @@ Issue #7: CPI and PPI come from the National Bureau of Statistics release list,
 social financing stock growth and M2 from the PBOC financial statistics report.
 Each value keeps its statistical period, publication date, source URL and scope.
 Nothing is estimated: a release that cannot be verified is reported as missing.
-Productivity and capital expenditure have no official monthly series here and
-stay unconnected.
+
+Issue #10 adds the productivity and investment group: monthly fixed-asset
+investment and industrial value added, plus the annual statistical bulletin
+(overall labour productivity, R&D spending and intensity), which is published
+once a year and is marked as such.
 """
 import html
 import re
@@ -18,12 +21,15 @@ from research_evidence_cache import load_record, save_record
 
 NBS_LIST_URL = 'https://www.stats.gov.cn/sj/zxfb/'
 PBC_LIST_URL = 'https://www.pbc.gov.cn/diaochatongjisi/116219/116225/index.html'
+ANNUAL_LIST_URL = 'https://www.stats.gov.cn/sj/tjgb/ndtjgb/'
+ANNUAL_MAX_AGE_DAYS = 460
+DASH = '[—－-]'
 CACHE_PATH = Path(__file__).resolve().parent.parent / 'data' / 'macro-long-wave-cache.json'
 MAX_AGE_DAYS = 62
 CACHE_SECONDS = 6 * 3600
 
 LINK = re.compile(r'<a\b[^>]*href=["\x27]([^"\x27]+)["\x27][^>]*>(.*?)</a>', re.S | re.I)
-SIGNED = r'(上涨|下降|增长|持平)([\d.]+)?%?'
+SIGNED = r'(上涨|下降|增长|提高|降低|减少|持平)([\d.]+)?%?'
 
 SPECS = {
     'cpi': {
@@ -43,6 +49,26 @@ SPECS = {
         'host': 'www.pbc.gov.cn', 'list': PBC_LIST_URL,
         'title': re.compile(r'(\d{4})年(\d{1,2}月|一季度|上半年|前三季度)?金融统计数据报告'),
         'scope': '社会融资规模存量与广义货币（M2）同比，月末存量；反映信用总量增速，不含债务负担、偿债能力或信用利差。',
+    },
+    'fai': {
+        'name': '国家统计局 · 全国固定资产投资',
+        'host': 'www.stats.gov.cn', 'list': NBS_LIST_URL,
+        'title': re.compile(r'(\d{4})年1' + DASH + r'(\d{1,2})月份全国固定资产投资基本情况'),
+        'scope': '年初至当月累计同比（不含农户），按国家统计局可比口径；反映投资规模变化，不等于资本回报或生产率。',
+    },
+    'industry': {
+        'name': '国家统计局 · 规模以上工业增加值',
+        'host': 'www.stats.gov.cn', 'list': NBS_LIST_URL,
+        'title': re.compile(r'(\d{4})年(\d{1,2})月份规模以上工业增加值(?:增长|下降)[\d.]*%?'),
+        'scope': '规模以上工业增加值同比实际增速（扣除价格因素）；只覆盖规模以上工业，不代表全要素生产率。',
+    },
+    'annual': {
+        'name': '国家统计局 · 国民经济和社会发展统计公报',
+        'host': 'www.stats.gov.cn', 'list': ANNUAL_LIST_URL,
+        'title': re.compile(r'中华人民共和国(\d{4})年国民经济和社会发展统计公报'),
+        # The bulletin list page names each release by its year only.
+        'list_title': re.compile(r'(?:中华人民共和国)?\d{4}年(?:国民经济和社会发展统计公报)?'),
+        'scope': '年度数据，每年约 2 月底发布一次：全员劳动生产率（按从业人员计算）与研究与试验发展（R&D）经费；不是月度变化。',
     },
 }
 
@@ -68,7 +94,7 @@ def _signed(verb, number):
     if number is None:
         raise ValueError('官方数值缺失')
     value = float(number)
-    return -value if verb == '下降' else value
+    return -value if verb in ('下降', '降低', '减少') else value
 
 
 def _check_dates(year, month, published, now):
@@ -151,14 +177,86 @@ def parse_credit(document, url, as_of):
     return _result('credit', url, title, published, year, month, values, _now(as_of))
 
 
-PARSERS = {'cpi': parse_cpi, 'ppi': parse_ppi, 'credit': parse_credit}
+def _nbs_page(document, url, kind):
+    if urlparse(url).hostname != 'www.stats.gov.cn':
+        raise ValueError(SPECS[kind]['name'] + ' 必须来自国家统计局')
+    title, stamp = _meta(document, 'ArticleTitle'), _meta(document, 'PubDate')
+    period = SPECS[kind]['title'].fullmatch(title or '')
+    if not period or not stamp:
+        raise ValueError(SPECS[kind]['name'] + ' 公告身份缺失')
+    return title, period, datetime.strptime(stamp, '%Y/%m/%d %H:%M').replace(tzinfo=CHINA), _visible(document)
+
+
+def _rate(pattern, visible, required=True):
+    match = re.search(pattern + SIGNED, visible)
+    if not match:
+        if required:
+            raise ValueError('官方数值缺失')
+        return None
+    value = _signed(match[1], match[2])
+    if not -100 <= value <= 100:
+        raise ValueError('官方数值超出合理范围')
+    return value
+
+
+def parse_fai(document, url, as_of):
+    title, period, published, visible = _nbs_page(document, url, 'fai')
+    year, month = map(int, period.groups())
+    _check_dates(year, month, published, _now(as_of))
+    head = '1' + DASH + r'%d月份，全国固定资产投资（不含农户）[\d.]+亿元，同比' % month
+    values = {'fai_yoy': _rate(head, visible), 'manufacturing_yoy': _rate('制造业投资', visible)}
+    # High-tech investment is not in every release; it is shown only when published.
+    for key, pattern in (('intellectual_property_yoy', '知识产权产品投资同比'), ('high_tech_yoy', '高技术产业投资(?:同比)?')):
+        value = _rate(pattern, visible, required=False)
+        if value is not None:
+            values[key] = value
+    return _result('fai', url, title, published, year, month, values, _now(as_of))
+
+
+def parse_industry(document, url, as_of):
+    title, period, published, visible = _nbs_page(document, url, 'industry')
+    year, month = map(int, period.groups())
+    _check_dates(year, month, published, _now(as_of))
+    values = {'value_added_yoy': _rate('%d月份，规模以上工业增加值同比实际' % month, visible)}
+    cumulative = _rate('1' + DASH + '%d月份，规模以上工业增加值同比' % month, visible, required=False)
+    if cumulative is not None:
+        values['value_added_ytd_yoy'] = cumulative
+    return _result('industry', url, title, published, year, month, values, _now(as_of))
+
+
+def parse_annual(document, url, as_of):
+    title, period, published, visible = _nbs_page(document, url, 'annual')
+    year, now = int(period[1]), _now(as_of)
+    if published.year != year + 1:
+        raise ValueError('年度公报统计年份与发布年份不符')
+    if not 0 <= (now - published).total_seconds() <= ANNUAL_MAX_AGE_DAYS * 86400:
+        raise ValueError('年度公报尚未发布或已过期')
+    labour = re.search(r'全员劳动生产率(?:\[\d+\])?为([\d.]+)元/人，比上年' + SIGNED, visible)
+    rd = re.search(r'研究与试验发展（R&D）经费支出([\d.]+)亿元，比上年' + SIGNED + r'，与国内生产总值之比为([\d.]+)%', visible)
+    if not labour or not rd:
+        raise ValueError('全员劳动生产率或 R&D 经费数值缺失')
+    values = {'labour_productivity': float(labour[1]), 'labour_productivity_growth': _signed(labour[2], labour[3]),
+              'rd_spending': float(rd[1]), 'rd_growth': _signed(rd[2], rd[3]), 'rd_intensity': float(rd[4])}
+    if not (0 < values['labour_productivity'] < 10_000_000 and 0 < values['rd_spending'] < 10_000_000
+            and 0 < values['rd_intensity'] < 20 and -50 <= values['labour_productivity_growth'] <= 50
+            and -50 <= values['rd_growth'] <= 50):
+        raise ValueError('年度数值超出合理范围')
+    result = _result('annual', url, title, published, year, 12, values, now)
+    result.update(period=str(year), frequency='annual')
+    return result
+
+
+PARSERS = {'cpi': parse_cpi, 'ppi': parse_ppi, 'credit': parse_credit,
+           'fai': parse_fai, 'industry': parse_industry, 'annual': parse_annual}
+SOURCE_IDS = {'cpi': 'macro:nbs_cpi', 'ppi': 'macro:nbs_ppi', 'credit': 'macro:pbc_credit',
+              'fai': 'macro:nbs_fai', 'industry': 'macro:nbs_industry', 'annual': 'macro:nbs_annual'}
 
 
 def candidates(kind, listing):
     spec, found = SPECS[kind], []
     for link, title in LINK.findall(listing):
         title = re.sub('<[^>]+>', '', title).strip()
-        if spec['title'].fullmatch(title):
+        if spec.get('list_title', spec['title']).fullmatch(title):
             url = urljoin(spec['list'], link)
             if urlparse(url).hostname == spec['host']:
                 found.append(url)
@@ -167,7 +265,7 @@ def candidates(kind, listing):
 
 
 def _source(kind):
-    return {'id': 'macro:' + ('pbc_credit' if kind == 'credit' else 'nbs_' + kind), 'name': SPECS[kind]['name'],
+    return {'id': SOURCE_IDS[kind], 'name': SPECS[kind]['name'],
             'url': SPECS[kind]['list'], 'status': 'error', 'count': 0, 'as_of': None,
             'fetched_at': now_iso(), 'scope': SPECS[kind]['scope']}
 
@@ -227,7 +325,7 @@ def collect_one(kind, as_of, listings, *, use_cache=True):
 
 
 def collect_long_wave_evidence(as_of, *, use_cache=True):
-    """Returns ({cpi, ppi, credit}, sources); one list page is fetched once."""
+    """Returns ({cpi, ppi, credit, fai, industry, annual}, sources); each list page is fetched once."""
     pages = {}
 
     def listing(url):
@@ -236,7 +334,7 @@ def collect_long_wave_evidence(as_of, *, use_cache=True):
         return pages[url]
 
     evidence, sources = {}, []
-    for kind in ('cpi', 'ppi', 'credit'):
+    for kind in ('cpi', 'ppi', 'credit', 'fai', 'industry', 'annual'):
         evidence[kind], source = collect_one(kind, as_of, listing, use_cache=use_cache)
         sources.append(source)
     return evidence, sources

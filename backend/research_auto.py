@@ -713,6 +713,10 @@ class AutoResearchEngine:
                 return
             if saved['report'].get('research_scope', 'funds') != self.research_scope:
                 return
+            if saved['report'].get('research_scope') == 'sectors':
+                # Reports saved before issue #10 carry 'x:retained:retained…' ids.
+                from research_evidence_resilience import collapse_retained
+                collapse_retained(saved['report'])
             self._state.update(report=saved['report'], completed_at=saved.get('completed_at'),
                                stage='已恢复上次报告，正在等待本轮自动更新', restored=True)
             if self.research_scope != 'sectors':
