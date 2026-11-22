@@ -194,7 +194,22 @@ def recent_sessions(market, as_of, count=MIN_HISTORY):
     return []
 
 
+YAHOO_PRIMARY = 'https://query1.finance.yahoo.com/'
+YAHOO_BACKUP = 'https://query2.finance.yahoo.com/'
+
+
 def _fetch(url):
+    # Yahoo refuses some requests on one host (HTTP 403) while its second host
+    # serves the same chart data; try it once before reporting a failure (issue #10).
+    if url.startswith(YAHOO_PRIMARY):
+        try:
+            return _fetch_once(url)
+        except Exception:
+            return _fetch_once(YAHOO_BACKUP + url[len(YAHOO_PRIMARY):])
+    return _fetch_once(url)
+
+
+def _fetch_once(url):
     request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; FundPilotLocalResearch/1.0; public research)',
         'Accept':'application/json,text/html,*/*'})
     body=fetch_bytes(request,timeout=15,max_bytes=16_000_000 if '/api/xbrl/companyfacts/' in url else 8_000_000)

@@ -672,7 +672,7 @@ def fetch_theme_memberships(catalog, as_of):
     ids = {row['id'] for row in catalog}
     result = {'memberships': {}, 'references': {}, 'sources': []}
     cni = {key: value for key, value in CNI_REFERENCES.items() if key in ids}
-    fetched = _parallel(list(cni), lambda key: fetch_cni_members(cni[key], as_of), 18, 4)
+    fetched = _parallel(list(cni), lambda key: fetch_cni_members(cni[key], as_of), 18, 4, retry_key='cni_members')
     for key, (rows, error) in fetched.items():
         ref = cni[key]
         source_id = 'public:members:' + key

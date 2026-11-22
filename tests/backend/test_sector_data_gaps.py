@@ -107,6 +107,7 @@ class SectorDataGapTests(unittest.TestCase):
              patch('research_overseas.collect_overseas_references', return_value=([], [], {})), \
              patch('research_reference_fallbacks.collect_money_reference', return_value=([], [], {})), \
              patch.object(sectors, 'collect_sector_market', return_value=snapshot), \
+             patch('research_public_data._save'), \
              patch.object(sectors, 'collect_sector_quotes', return_value=([], [])), \
              patch.object(sectors, 'collect_macro_risk', return_value=({'status':'unavailable','risk_score':None},{'id':'macro:nbs_pmi','status':'error'})), \
              patch.object(sectors, 'collect_long_wave_evidence', return_value=({}, [])), \

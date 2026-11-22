@@ -63,6 +63,52 @@ def valid_member(row, as_of):
         return False
 
 
+RETAINED = ':retained'
+
+
+def retained_base(identity):
+    """The original source id without any (possibly repeated) ':retained' suffix."""
+    identity = str(identity)
+    while identity.endswith(RETAINED):
+        identity = identity[:-len(RETAINED)]
+    return identity
+
+
+def _collapsed(identity):
+    base = retained_base(identity)
+    return base + RETAINED if base != str(identity) else base
+
+
+def collapse_retained(value):
+    """Repair ids nested by earlier rounds ('x:retained:retained…', issue #10).
+
+    Each source list keeps one entry per collapsed id (the last one, the newest),
+    and every 'source_ids' list is rewritten the same way. Changes in place.
+    """
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == 'sources' and isinstance(item, list):
+                kept = {}
+                for source in item:
+                    if isinstance(source, dict) and isinstance(source.get('id'), str):
+                        source['id'] = _collapsed(source['id'])
+                        kept.pop(source['id'], None)
+                        kept[source['id']] = source
+                    else:
+                        kept[id(source)] = source
+                item[:] = list(kept.values())
+                for source in item:
+                    collapse_retained(source)
+            elif key == 'source_ids' and isinstance(item, list):
+                item[:] = list(dict.fromkeys(_collapsed(i) if isinstance(i, str) else i for i in item))
+            else:
+                collapse_retained(item)
+    elif isinstance(value, list):
+        for item in value:
+            collapse_retained(item)
+    return value
+
+
 def retain_company_components(company, previous, as_of, catalog=None):
     from research_public_data import _get
     pools = company.setdefault('sector_leaders', {})
@@ -129,15 +175,23 @@ def retain_company_components(company, previous, as_of, catalog=None):
                 row['history'] = copy.deepcopy(prior['history'])
                 row['history_count'] = len(row['history'])
                 row['price_adjustment'] = prior.get('price_adjustment')
-            needed = [s for s in prior.get('source_ids', []) if s not in source_map or source_map[s].get('status') in {'error', 'timeout'}]
-            for key in needed:
-                if key in old_sources:
-                    source = copy.deepcopy(old_sources[key])
-                    source.update(cache_used=True, checked_at=as_of)
-                    retained_id = key + ':retained' if key in source_map else key
-                    source['id'] = retained_id
-                    retained_sources[retained_id] = source
-                    row['source_ids'] = list(dict.fromkeys(row.get('source_ids', []) + [retained_id]))
+            for key in prior.get('source_ids', []):
+                # Work from the original id so the suffix is added at most once (issue #10).
+                base = retained_base(key)
+                live = source_map.get(base)
+                if live and live.get('status') not in {'error', 'timeout'}:
+                    continue
+                old = old_sources.get(key) or old_sources.get(base + RETAINED) or old_sources.get(base)
+                # Only good evidence is carried forward; an old failure is not evidence.
+                if not old or old.get('status') in {'error', 'timeout'}:
+                    continue
+                source = copy.deepcopy(old)
+                source.update(cache_used=True, checked_at=as_of)
+                retained_id = base + RETAINED if base in source_map else base
+                source['id'] = retained_id
+                retained_sources[retained_id] = source
+                ids = [i for i in row.get('source_ids', []) if retained_base(i) != base or i == base]
+                row['source_ids'] = list(dict.fromkeys(ids + [retained_id]))
     company.setdefault('sources', []).extend(retained_sources.values())
     company['evidence_recovery'] = recovered
     return company

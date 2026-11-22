@@ -290,6 +290,24 @@ def _catalog_request(kind, page):
     return CATALOG_URL + '?' + query
 
 
+# The ranking API answers on a numbered mirror when the main host refuses or
+# times out (issue #10). Same publisher and response format; tried in order.
+CATALOG_HOSTS = ('push2.eastmoney.com', '82.push2.eastmoney.com')
+
+
+def _fetch_catalog(url):
+    """One ranking page, trying each host once; a format error is not retried."""
+    last = None
+    for host in CATALOG_HOSTS:
+        try:
+            return json.loads(fetch_text(url.replace('push2.eastmoney.com', host, 1)))
+        except ValueError:
+            raise
+        except Exception as error:
+            last = error
+    raise ConnectionError('板块行情接口连接失败（已尝试备用地址）') from last
+
+
 def parse_sector_quotes(data, source_id):
     payload = data.get('data') if isinstance(data, dict) else None
     raw = payload.get('diff') if isinstance(payload, dict) else None
@@ -324,20 +342,22 @@ def collect_sector_quotes():
                   'status': 'ok', 'count': 0, 'scope': '直接板块参考指数与成分涨跌家数；不含产品数据'}
         fetched, errors, total = [], [], None
         try:
-            data = json.loads(fetch_text(source['url']))
+            data = _fetch_catalog(source['url'])
             fetched.extend(parse_sector_quotes(data, identity))
             total = int((data.get('data') or {}).get('total') or 0)
             pages = min(MAX_PAGES, max(1, math.ceil(total / PAGE_SIZE)))
             with ThreadPoolExecutor(max_workers=3) as pool:
-                pending = {pool.submit(fetch_text, _catalog_request(kind, page)): page
+                pending = {pool.submit(_fetch_catalog, _catalog_request(kind, page)): page
                            for page in range(2, pages + 1)}
                 for future in as_completed(pending):
                     try:
-                        fetched.extend(parse_sector_quotes(json.loads(future.result()), identity))
+                        fetched.extend(parse_sector_quotes(future.result(), identity))
                     except Exception:
                         errors.append(f'第{pending[future]}页未取得')
+        except ValueError:
+            errors.append('公开行情响应格式发生变化，未能解析板块列表')
         except Exception:
-            errors.append('公开行情连接失败或响应格式发生变化')
+            errors.append('公开行情连接失败（主地址与备用地址均未响应）')
         unique = {row['code']: row for row in fetched}
         fetched = list(unique.values())
         source.update(count=len(fetched), total_count=total,
@@ -1054,8 +1074,8 @@ def run_sector_research(progress=None, previous=None, refresh=False, data_config
     # against collection completion rather than treating a new tick as future.
     as_of = now_iso()
     snapshot['as_of'] = as_of
-    from research_evidence_resilience import retain_company_components, retain_closed_baskets, remember_company_evidence
-    retain_company_components(company, prior_public.get('company_evidence', {}), as_of, catalog)
+    from research_evidence_resilience import retain_company_components, retain_closed_baskets, remember_company_evidence, collapse_retained
+    retain_company_components(company, collapse_retained(copy.deepcopy(prior_public.get('company_evidence', {}))), as_of, catalog)
     snapshot['sources'].extend(company['sources'])
     snapshot['warnings'].extend(company['warnings'])
     from research_leader_index import collect_leader_histories, build_indicator, apply_indicator, refresh_custom_scores

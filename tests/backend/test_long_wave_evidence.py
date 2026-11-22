@@ -33,6 +33,17 @@ PPI = page('2026年10月份工业生产者出厂价格同比下降1.2% 环比上
 CREDIT = page('2026年10月金融统计数据报告', '2026-11-13',
               '一、社会融资规模存量同比增长7.2% 初步统计，2026年10月末社会融资规模存量为469.16万亿元，同比增长7.2%。'
               '10月末，广义货币（M2）余额359.06万亿元，同比增长7.1%。')
+FAI_URL = 'https://www.stats.gov.cn/sj/zxfb/202611/t20261116_1965841.html'
+INDUSTRY_URL = 'https://www.stats.gov.cn/sj/zxfb/202611/t20261116_1965842.html'
+ANNUAL_URL = 'https://www.stats.gov.cn/sj/zxfb/202602/t20260228_1962662.html'
+FAI = page('2026年1—10月份全国固定资产投资基本情况', '2026/11/16 10:00',
+           '1—10月份，全国固定资产投资（不含农户）364824亿元，同比下降8.1%（按可比口径计算）。'
+           '其中，知识产权产品投资同比增长9.2%。工业投资同比下降3.6%。其中，制造业投资下降2.9%。')
+INDUSTRY = page('2026年10月份规模以上工业增加值增长4.8%', '2026/11/16 10:00',
+                '10月份，规模以上工业增加值同比实际增长4.8%（扣除价格因素）。1—10月份，规模以上工业增加值同比增长5.3%。')
+ANNUAL = page('中华人民共和国2025年国民经济和社会发展统计公报', '2026/02/28 09:30',
+              '全员劳动生产率[4]为184413元/人，比上年提高6.1%。'
+              '全年研究与试验发展（R&amp;D）经费支出39262亿元，比上年增长8.1%，与国内生产总值之比为2.80%。')
 
 
 class ParserTests(unittest.TestCase):
@@ -46,6 +57,21 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(credit['values'], {'social_financing_stock': 469.16, 'social_financing_yoy': 7.2,
                                             'm2_balance': 359.06, 'm2_yoy': 7.1})
         self.assertIn('不含债务负担', credit['scope'])
+
+    def test_productivity_releases_monthly_and_annual(self):
+        fai = lw.parse_fai(FAI, FAI_URL, AS_OF)
+        self.assertEqual(fai['values'], {'fai_yoy': -8.1, 'manufacturing_yoy': -2.9, 'intellectual_property_yoy': 9.2})
+        industry = lw.parse_industry(INDUSTRY, INDUSTRY_URL, AS_OF)
+        self.assertEqual(industry['values'], {'value_added_yoy': 4.8, 'value_added_ytd_yoy': 5.3})
+        annual = lw.parse_annual(ANNUAL, ANNUAL_URL, AS_OF)
+        self.assertEqual((annual['period'], annual['frequency']), ('2025', 'annual'))
+        self.assertEqual(annual['values'], {'labour_productivity': 184413.0, 'labour_productivity_growth': 6.1,
+                                            'rd_spending': 39262.0, 'rd_growth': 8.1, 'rd_intensity': 2.8})
+        # A bulletin is valid until roughly the next one, not for 62 days; too old is rejected.
+        with self.assertRaises(ValueError):
+            lw.parse_annual(ANNUAL, ANNUAL_URL, '2027-06-30T10:00:00+08:00')
+        with self.assertRaises(ValueError):
+            lw.parse_fai(FAI.replace('制造业投资下降2.9%', ''), FAI_URL, AS_OF)
 
     def test_wrong_host_future_stale_or_missing_values_are_rejected(self):
         cases = [
@@ -63,9 +89,13 @@ class ParserTests(unittest.TestCase):
 
     def test_collection_reads_list_once_and_caches_outside_data(self):
         listing_nbs = ('<a href="./202611/t20261109_1965795.html">2026年10月份居民消费价格同比上涨0.7%</a>'
-                       '<a href="./202611/t20261109_1965794.html">2026年10月份工业生产者出厂价格同比下降1.2% 环比上涨0.7%</a>')
+                       '<a href="./202611/t20261109_1965794.html">2026年10月份工业生产者出厂价格同比下降1.2% 环比上涨0.7%</a>'
+                       '<a href="./202611/t20261116_1965841.html">2026年1—10月份全国固定资产投资基本情况</a>'
+                       '<a href="./202611/t20261116_1965842.html">2026年10月份规模以上工业增加值增长4.8%</a>')
         listing_pbc = '<a href="/diaochatongjisi/116219/116225/2026111317040354319/index.html">2026年10月金融统计数据报告</a>'
-        pages = {lw.NBS_LIST_URL: listing_nbs, lw.PBC_LIST_URL: listing_pbc, CPI_URL: CPI, PPI_URL: PPI, PBC_URL: CREDIT}
+        listing_annual = '<a href="https://www.stats.gov.cn/sj/zxfb/202602/t20260228_1962662.html">2025年</a>'
+        pages = {lw.NBS_LIST_URL: listing_nbs, lw.PBC_LIST_URL: listing_pbc, lw.ANNUAL_LIST_URL: listing_annual,
+                 CPI_URL: CPI, PPI_URL: PPI, PBC_URL: CREDIT, FAI_URL: FAI, INDUSTRY_URL: INDUSTRY, ANNUAL_URL: ANNUAL}
         calls = []
 
         def fetch(url, *args):
@@ -75,8 +105,10 @@ class ParserTests(unittest.TestCase):
                 patch.object(lw, 'fetch_text', side_effect=fetch), patch.object(lw, 'now_iso', return_value=AS_OF):
             evidence, sources = lw.collect_long_wave_evidence(AS_OF)
             self.assertEqual(calls.count(lw.NBS_LIST_URL), 1)
-            self.assertEqual({k: v['status'] for k, v in evidence.items()}, {'cpi': 'ok', 'ppi': 'ok', 'credit': 'ok'})
-            self.assertEqual([s['id'] for s in sources], ['macro:nbs_cpi', 'macro:nbs_ppi', 'macro:pbc_credit'])
+            self.assertEqual({k: v['status'] for k, v in evidence.items()},
+                             {k: 'ok' for k in ('cpi', 'ppi', 'credit', 'fai', 'industry', 'annual')})
+            self.assertEqual([s['id'] for s in sources], ['macro:nbs_cpi', 'macro:nbs_ppi', 'macro:pbc_credit',
+                                                          'macro:nbs_fai', 'macro:nbs_industry', 'macro:nbs_annual'])
             calls.clear()
             again, _ = lw.collect_long_wave_evidence('2026-11-21T11:00:00+08:00')
             self.assertEqual(calls, [])
